@@ -1,4 +1,5 @@
 # gazebo_env.py
+# Ver-2
 import gymnasium as gym
 import numpy as np
 
@@ -10,6 +11,8 @@ import time
 
 import math
 import json
+
+from collections import deque
 
 #obj fields
 CMD_DIM = 3
@@ -30,16 +33,22 @@ class MiniPupperEnv(gym.Env):
         super().__init__()
         self.ros = MiniPupperROSInterface()
 
+        # --- 【追加】時系列（履歴）の設定 ---
+        self.history_len = 6
+        self.raw_obs_dim = 31  # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
+
         #
         # Observation
         #
+        # 【変更】Observation Space の shape を (6, 31) の2次元に変更
         self.observation_space = gym.spaces.Box(
             low=-np.inf,
             high=np.inf,
             #shape=(14,),      # joint12 + roll + pitch
             #shape=(17,),      # cmd_vel(3) + joint12 + roll + pitch
             #shape=(19,),      # cmd_vel(3) + joint12 + quat(4)
-            shape=(31,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
+            #shape=(31,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
+            shape=(self.history_len, self.raw_obs_dim),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
             dtype=np.float32,
         )
         #
@@ -51,6 +60,10 @@ class MiniPupperEnv(gym.Env):
             shape=(12,),
             dtype=np.float32,
         )
+
+        # 【追加】過去6ステップ分のデータを自動管理するリングバッファ
+        self.obs_history = deque(maxlen=self.history_len)
+
 
         # Mini Pupper2 の、立った状態の pose
         self.stand_pose_not_use = np.array([
@@ -195,8 +208,19 @@ class MiniPupperEnv(gym.Env):
         self.ros.publish_cmd_vel(self.cmd_vel)
         rclpy.spin_once(self.ros, timeout_sec=0.01)
 
-        obs = self.ros.get_observation()
-        return obs, {}
+        #obs = self.ros.get_observation()
+
+        # 1. 既存の関数で『今この瞬間』の生データ(31次元)を取得
+        raw_obs = self.ros.get_observation()
+        
+        # 2. 【追加】バッファをクリアし、開始直後は最初のデータで6マス全て埋める
+        self.obs_history.clear()
+        for _ in range(self.history_len):
+            self.obs_history.append(raw_obs)
+            
+        #return obs, {}
+        # 3. [6, 31] の形状の NumPy 配列に変換して返す
+        return np.array(self.obs_history, dtype=np.float32),{}
 
     def make_test_cmd(self):
         #MAX_LIN_X = 0.26  # m/s
@@ -393,8 +417,9 @@ class MiniPupperEnv(gym.Env):
         # Observation
         #
         obs = self.ros.get_observation()
-
         #print(F'step():#2 obs[0]:{obs[0]:.2f} ,obs[1]:{obs[1]:.2f} ,obs[2]:{obs[2]:.2f}')
+
+        self.obs_history.append(obs) # 自動で一番古いデータが消え、最新が右端に入ります
 
         #
         # 転倒、コースズレ判定
@@ -435,8 +460,13 @@ class MiniPupperEnv(gym.Env):
         #print(F"steps:{self.episode_steps} reward:{reward:.2f}")
 
         # ==================================================================
+
+        # 4. バッファを [6, 31] の NumPy 配列に変換
+        next_obs = np.array(self.obs_history, dtype=np.float32)
+
         return (
-            obs,
+            #obs,
+            next_obs,
             reward,
             terminated,
             truncated,
