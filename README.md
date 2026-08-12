@@ -19,7 +19,10 @@ sb3(Stable Baseline3) ppo(Proximal Policy Optimiaztion) で、強化学習と模
     
 #### 3. source script 作成  
 
-~/setup-ros2-mujoco-run  
+sb3 opp のコードを実行する時  
+$ source ~/setup-ros2-mujoco-run  
+
+~/setup-ros2-mujoco-run の中身  
 
 ````
 #echo "ros2"
@@ -49,7 +52,10 @@ export PYTHONPATH=~/mujoco_env/lib/python3.12/site-packages:$PYTHONPATH
 
 ````
 
-~/setup-ros2-build  
+ros2 script を実行する時。  
+$ source ~/setup-ros2-build  
+
+~/setup-ros2-build の中身  
 
 ````
 #echo "ros2"
