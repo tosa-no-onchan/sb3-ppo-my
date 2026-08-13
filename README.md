@@ -31,3 +31,8 @@ $ mv setup-ros2-build ~/
 
     $ source ~/setup-ros2-build  
 
+#### 4. summary  
+
+#### 4.2 mini_pupper_rl_lt  
+
+    sb3 opp Locomotion Transformer  
