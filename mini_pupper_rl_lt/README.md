@@ -19,3 +19,5 @@ $ cd sb3-ppo-my/mini_pupper_rl_lt
 $ jupyter notebook  
 
 ##### 2. 参照  
+
+[mini_pupper_ros_my](https://github.com/tosa-no-onchan/mini_pupper_ros_my)
