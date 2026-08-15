@@ -62,7 +62,6 @@ class MiniPupperEnv(gym.Env):
         # 【追加】過去6ステップ分のデータを自動管理するリングバッファ
         self.obs_history = deque(maxlen=self.history_len)
 
-
         # Mini Pupper2 の、立った状態の pose
         self.stand_pose_not_use = np.array([
             0.0,  0.994, -1.767,  # 左前
@@ -100,21 +99,25 @@ class MiniPupperEnv(gym.Env):
         self.move_penalty_cur=0.0
 
         # 完走が、出始める迄 stage=0   100,000 - 200,000 steps 迄
-        # その後、cmd_vel 追随のフェーズでは、 stage=1
-        self.stage=0        # reward stage 0/1
+        # その後、cmd_vel 追随のフェーズでは、 stage=1 や 2 する
+        self.stage=2        # reward stage 0/1/2
+
+        self.min_height=0.12
+        self.z_sigma = 0.02   # 許容するブレ幅の感度
 
         # train 初めは、優しい教育
         if self.stage==0:
-            #self.min_height=0.07
-            self.min_height=0.08
-            #self.min_height=0.085
-            #self.min_height=0.087
-            #self.min_height=0.09
-
-            #self.limit_height=0.065
+            #self.min_height=0.08
+            #self.z_sigma = 0.02   # 許容するブレ幅の感度
             self.limit_height=0.05
+
+        elif self.stage==1:
+            #self.min_height=0.085
+            self.z_sigma = 0.035   # 許容するブレ幅の感度
+            self.limit_height=0.065
         else:
-            self.min_height=0.085
+            #self.min_height=0.1
+            self.z_sigma = 0.03   # 許容するブレ幅の感度
             self.limit_height=0.065
 
     def reset(self, seed=None, options=None):
@@ -306,6 +309,7 @@ class MiniPupperEnv(gym.Env):
         #if self.test_id > 30:
         if self.test_id > 18:
             self.test_id=0
+            self.rotate_emphance = not self.rotate_emphance
 
     def step(self, action):
         # 毎ステップ、カウンターを1増やす
@@ -556,6 +560,7 @@ class MiniPupperEnv(gym.Env):
             reward_pos = np.exp(-2.0 * pos_error_sq)
             #print(F"pos_error_sq:{pos_error_sq:.3f} reward_pos:{reward_pos:.3f}")
         else:
+            # - を入れて、めりはりをつける!!
             distance_error = np.linalg.norm(np.sqrt(pos_error_sq))
             # 距離の遅れに対して、容赦なくマイナスを食らわせる
             #reward_pos = -10.0 * distance_error    # 増えていきすぎるか!!
@@ -579,6 +584,7 @@ class MiniPupperEnv(gym.Env):
             # 向き追従オヤツ（理想の方向を向いていれば最大 1.0点）
             reward_yaw = np.exp(-4.0 * (yaw_error**2))
         else:
+            # - を入れて、めりはりをつける!!
             # 1. 20度をラジアンに変換（約 0.349 rad）
             threshold_yaw = np.radians(20.0) 
             # 2. 条件分岐で報酬を計算
@@ -608,25 +614,25 @@ class MiniPupperEnv(gym.Env):
         #tilt_penalty = (roll ** 2) + (pitch ** 2)
 
         height_penalty = 0.0
-        #min_height=0.07
-        #min_height=0.08
-        #min_height=0.085
-        #min_height=0.087
-        #min_height=0.09
         # 6. 高さの報酬
-        if actual_z <= self.min_height:
-            #height_penalty = (actual_z - min_height) * 100.0
-            #height_penalty = (actual_z - min_height) * 150.0 * 2.0
-            #height_penalty = -1.5
-            height_penalty = -0.5
-            #height_penalty = -0.2
-            #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
+        if self.stage==0:
+            # 目標の高さに近いほど 1.0 に近づき、離れると 0 になる報酬
+            height_penalty = np.exp(-((actual_z - self.min_height) ** 2) / (self.z_sigma ** 2))
         else:
-            height_penalty = (actual_z - self.min_height) * 10.0 * 2.0
-            #height_penalty = 0.2
-            #pass
+            # - を入れて、めりはりをつける!!
+            if actual_z <= (self.min_height-self.z_sigma):
+                #height_penalty = (actual_z - min_height) * 100.0
+                #height_penalty = (actual_z - min_height) * 150.0 * 2.0
+                #height_penalty = -1.5
+                height_penalty = -0.5
+                #height_penalty = -0.2
+                #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
+            else:
+                height_penalty = (actual_z - (self.min_height-self.z_sigma)) * 10.0 * 2.0
+                #height_penalty = 0.2
+                #pass
 
-            #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
+                #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
 
         if False:
             #move_penalty = self.move_check()
