@@ -19,11 +19,14 @@ from geometry_msgs.msg import PoseArray # ⭕ PoseArray をインポート
 # /cmd_vel normalize
 # 設計した最大値の定義
 #MAX_LIN_X = 0.8  # m/s
-MAX_LIN_X = 0.26  # m/s
+#MAX_LIN_X = 0.26  # m/s
+MAX_LIN_X = 0.5  # m/s  mini pupper2 推奨速度
 #MAX_LIN_Y = 0.4  # m/s
-MAX_LIN_Y = 0.13  # m/s
+#MAX_LIN_Y = 0.13  # m/s
+MAX_LIN_Y = 0.5  # m/s mini pupper2 推奨速度
 #MAX_ANG_Z = 2.0  # rad/s
-MAX_ANG_Z = 1.82  # rad/s
+#MAX_ANG_Z = 1.82  # rad/s
+MAX_ANG_Z = 1.0  # rad/s mini pupper2 推奨角速度
 
 # joint normalize
 # 例：最大可動域を 1.57 rad (90度) と仮定して [-1, 1] に収める場合
@@ -314,12 +317,12 @@ class MiniPupperROSInterface(Node):
                     # ⭕【新考案】仮想オドメトリ（Pupperのあるべき理想位置）の累積計算
                     # ==================================================================
                     # self.cmd_vel の内訳：[0]: 前進速度(vx), [1]: 横速度(vy), [2]: 旋回速度(v_yaw)
-                    cmd_vx = self.cmd_vel[0] * self.fact_vel
-                    cmd_vy = self.cmd_vel[1] * self.fact_vel
-                    cmd_vyaw = self.cmd_vel[2] * self.fact_rot
+                    cmd_vx = self.cmd_vel[0] * self.fact_vel    # [m/s]
+                    cmd_vy = self.cmd_vel[1] * self.fact_vel    # [m/s]
+                    cmd_vyaw = self.cmd_vel[2] * self.fact_rot  # [rad/s]
                     
                     # 理想の向き（yaw）の更新
-                    self.pupper_virt_odom['yaw'] += cmd_vyaw * dt
+                    self.pupper_virt_odom['yaw'] += cmd_vyaw * dt # [rad/s] * dt -> [rad]
                     # -π 〜 +π の範囲に正規化（バグ防止）
                     self.pupper_virt_odom['yaw'] = np.arctan2(np.sin(self.pupper_virt_odom['yaw']), np.cos(self.pupper_virt_odom['yaw']))
                     
@@ -327,8 +330,8 @@ class MiniPupperROSInterface(Node):
                     cos_v = np.cos(self.pupper_virt_odom['yaw'])
                     sin_v = np.sin(self.pupper_virt_odom['yaw'])
                     
-                    self.pupper_virt_odom['x'] += (cmd_vx * cos_v - cmd_vy * sin_v) * dt
-                    self.pupper_virt_odom['y'] += (cmd_vx * sin_v + cmd_vy * cos_v) * dt
+                    self.pupper_virt_odom['x'] += (cmd_vx * cos_v - cmd_vy * sin_v) * dt    # [ms] * dt -> [m]
+                    self.pupper_virt_odom['y'] += (cmd_vx * sin_v + cmd_vy * cos_v) * dt    # [ms] * dt -> [m]
 
             self.last_x = self.current_x
             self.last_y = self.current_y

@@ -218,7 +218,7 @@ class enjoyPupperNode(Node):
             self.ros.wait_for_gazebo_steps(target_steps=WAITE_STEP,call_th=True)
 
             # デバッグ用ログ：交互に綺麗に回っているか確認
-            print(f"cmd_vel:{obs[0]:.2f} {obs[2]:.2f}, angles:{target_angles[0]:.2f} -> send_action!")
+            print(f"cmd_vel:{obs[0]:.2f} {obs[2]:.2f}, act lf2:{target_angles[1]:.2f} lf3:{target_angles[2]:.2f} ,rf2:{target_angles[4]:.2f} rf3:{target_angles[5]:.2f}")
 
             #print(F"call ros.send_action()")
 

@@ -100,7 +100,7 @@ class MiniPupperEnv(gym.Env):
 
         # 完走が、出始める迄 stage=0   100,000 - 200,000 steps 迄
         # その後、cmd_vel 追随のフェーズでは、 stage=1 や 2 する
-        self.stage=2        # reward stage 0/1/2
+        self.stage=0        # reward stage 0/1/2
 
         self.min_height=0.12
         self.z_sigma = 0.02   # 許容するブレ幅の感度
@@ -755,7 +755,8 @@ class MiniPupperEnv(gym.Env):
         #print(F'check_fall(): roll:{roll} pitch:{pitch}')
         if abs(roll) > 0.8 or abs(pitch) > 0.8:
             #print(f"コケたのでお説教！ roll: {abs(roll):.2f} , pitch:{abs(pitch):.2f}")
-            return True,-120.0
+            #return True,-120.0
+            return True,-250.0
 
         # 2. 【進化】仮想の理想位置から 1.0メートル以上 脱線したらお説教リセット！
         actual_x = self.ros.current_x
