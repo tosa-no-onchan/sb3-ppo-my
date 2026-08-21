@@ -1,6 +1,7 @@
 # gazebo_env.py
 # Ver-2
 import gymnasium as gym
+
 import numpy as np
 
 from ros_interface import MiniPupperROSInterface, MAX_LIN_X , MAX_LIN_Y , MAX_ANG_Z, MAX_JOINT_RAD, MAX_JOINT_RAD20
@@ -83,9 +84,8 @@ class MiniPupperEnv(gym.Env):
         #self._max_episode_steps = 250   # 0.02
         self._max_episode_steps = 300   # 0.02
         #self._max_episode_steps = 125   # 0.04
-        self.bonus=50.0
-        #self.bonus=5.0
-        #self.bonus=100.0
+        #self.bonus=50.0
+        self.bonus=0.1     # changed by nishi 2026.8.19
         self.next_bounus_steps = self._max_episode_steps
 
         # カウンター用の変数を初期化に追加しておく
@@ -98,9 +98,12 @@ class MiniPupperEnv(gym.Env):
         self.move_penalty=0.0
         self.move_penalty_cur=0.0
 
+        self.reward_pos_av=0.0
+        self.reward_yaw_av=0.0
+
         # 完走が、出始める迄 stage=0   100,000 - 200,000 steps 迄
         # その後、cmd_vel 追随のフェーズでは、 stage=1 や 2 する
-        self.stage=0        # reward stage 0/1/2
+        self.stage=2        # reward stage 0/1/2
 
         self.min_height=0.12
         self.z_sigma = 0.02   # 許容するブレ幅の感度
@@ -110,11 +113,20 @@ class MiniPupperEnv(gym.Env):
             #self.min_height=0.08
             #self.z_sigma = 0.02   # 許容するブレ幅の感度
             self.limit_height=0.05
+            # 位置追従オヤツ（ぴったり重なれば最大 1.0点、離れるほどゼロに近づく）
+            self.reward_pos_c = -2.0
+            # 向き追従オヤツ（理想の方向を向いていれば最大 1.0点）
+            self.reward_yaw_c = -4.0
 
         elif self.stage==1:
             #self.min_height=0.085
             self.z_sigma = 0.035   # 許容するブレ幅の感度
             self.limit_height=0.065
+            # 50cmズレたら大幅減点（残り13.5%）。動かないとすぐに0点になるため、前進を促せる
+            self.reward_pos_c = -8.0
+            # 向きのズレにも厳しくし、前進方向を固定させる（約15度ズレたら残り36%まで減点）
+            self.reward_yaw_c = -15.0
+
         else:
             #self.min_height=0.1
             self.z_sigma = 0.03   # 許容するブレ幅の感度
@@ -129,6 +141,9 @@ class MiniPupperEnv(gym.Env):
         self.prev_action_norm = None
         self.move_penalty=0.0
         self.move_penalty_cur=0.0
+
+        self.reward_pos_av=0.0
+        self.reward_yaw_av=0.0
 
         # 既存のシード初期化
         super().reset(seed=seed)
@@ -450,14 +465,19 @@ class MiniPupperEnv(gym.Env):
         # コケずに（not terminated）、500ステップ耐え抜いた（truncated）瞬間なら
         #if truncated and not terminated:
         if self.episode_steps >= self.next_bounus_steps and not terminated:
-            #if self.move_penalty < 0.0:
-            #    bonus=0.0
-            #else:
-            #    bonus = self.bonus  # 🎁 特大ボーナス（普段の数十倍の価値のオヤツ！）
-            bonus = self.bonus  # 🎁 特大ボーナス（普段の数十倍の価値のオヤツ！）
+            bonus = 0.0
+            self.reward_pos_av /= self._max_episode_steps
+            self.reward_yaw_av /= self._max_episode_steps
+            if self.stage == 2:
+                if self.reward_pos_av > 0.0 and self.reward_yaw_av > 0.0:
+                    bonus = self.bonus  # 🎁 特大ボーナス（普段の数十倍の価値のオヤツ！）
+            else:
+                if self.reward_pos_av > 0.8 and self.reward_yaw_av > 0.8:
+                    bonus = self.bonus  # 🎁 特大ボーナス（普段の数十倍の価値のオヤツ！）
+
             reward += bonus
             self.next_bounus_steps = self.next_bounus_steps + self._max_episode_steps
-            print(f"🎉 {self._max_episode_steps}ステップ完走！特大ボーナス {bonus} 点をプレゼント！")
+            print(f"🎉 {self._max_episode_steps}ステップ完走！特大ボーナス {bonus} 点をプレゼント！ reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f}")
 
         #print(F"steps:{self.episode_steps} reward:{reward:.2f}")
 
@@ -557,21 +577,28 @@ class MiniPupperEnv(gym.Env):
         reward_pos=0.0
         if self.stage==0 or self.stage==1:
             # 位置追従オヤツ（ぴったり重なれば最大 1.0点、離れるほどゼロに近づく）
-            reward_pos = np.exp(-2.0 * pos_error_sq)
+            #reward_pos = np.exp(-2.0 * pos_error_sq)
+            reward_pos = np.exp(self.reward_pos_c * pos_error_sq)
             #print(F"pos_error_sq:{pos_error_sq:.3f} reward_pos:{reward_pos:.3f}")
         else:
             # - を入れて、めりはりをつける!!
-            distance_error = np.linalg.norm(np.sqrt(pos_error_sq))
-            # 距離の遅れに対して、容赦なくマイナスを食らわせる
-            #reward_pos = -10.0 * distance_error    # 増えていきすぎるか!!
-            if distance_error < 0.5:
-                # 位置追従オヤツ（ぴったり重なれば最大 1.0点、離れるほどゼロに近づく）
-                reward_pos = np.exp(-2.0 * pos_error_sq) * 0.2
+            # 1. 前提条件と最大許容値の設定
+            threshold_pos = 0.5  # 境界線：50cm（0.5m）
+            max_pos_error = 3.0  # 想定される最大のズレ：3.0m（目標が3m先のため）
+
+            distance_error = np.sqrt(pos_error_sq) # 直線距離（※np.linalg.normは不要です）
+
+            if distance_error < threshold_pos:
+                # 【ボーナス】50cm以内ならプラス（ぴったりで1.0点、50cm離れると0.0点に近づく）
+                # 元のexpの形を活かしつつ、50cmでほぼ0（0.01）になるよう係数を-18.0に調整
+                reward_pos = np.exp(-18.0 * pos_error_sq)
             else:
-                reward_pos = -0.1 * distance_error
-                if abs(reward_pos) > 2:
-                    #reward_pos= -2.0
-                    pass
+                # 【ペナルティ】50cm以上離れたら、0.0 〜 -1.0 に綺麗に収める
+                # 50cmを超えて「最大3.0mまで」の間に、どれだけはみ出したかの比率を計算
+                reward_pos = - (distance_error - threshold_pos) / (max_pos_error - threshold_pos)
+                # 万が一、3.0m以上離れてマイナスが大きくなりすぎないようにガード（-1.0で固定）
+                reward_pos = max(reward_pos, -1.0)
+
             #print(F"episode_steps:{self.episode_steps} distance_error:{distance_error:.3f} reward_pos:{reward_pos:.3f}")
 
         #print(F"pos_error_sq:{pos_error_sq:.3f} reward_pos:{reward_pos:.3f}")
@@ -582,21 +609,20 @@ class MiniPupperEnv(gym.Env):
         yaw_error = np.arctan2(np.sin(yaw_error), np.cos(yaw_error)) # -π〜+π正規化
         if self.stage==0 or self.stage==1:
             # 向き追従オヤツ（理想の方向を向いていれば最大 1.0点）
-            reward_yaw = np.exp(-4.0 * (yaw_error**2))
+            #reward_yaw = np.exp(-4.0 * (yaw_error**2))
+            reward_yaw = np.exp(self.reward_yaw_c * (yaw_error**2))
         else:
             # - を入れて、めりはりをつける!!
             # 1. 20度をラジアンに変換（約 0.349 rad）
-            threshold_yaw = np.radians(20.0) 
+            threshold_yaw = np.radians(20.0)
+            max_yaw = np.radians(180.0)  # 最大のズレ（πラジアン = 180度）
             # 2. 条件分岐で報酬を計算
             if abs(yaw_error) > threshold_yaw:
-                # 【ペナルティ】20度以上ズレたら、ズレの大きさに応じて容赦なく「マイナス（減点）」
-                reward_yaw = -abs(yaw_error) * 5.0  # 係数を少し強め（5.0等）にするのがコツです
-                if np.abs(reward_yaw) > 2.0:
-                    #reward_yaw = -2.0
-                    pass
+                # 【21度〜180度を 0.0 〜 -1.0 に収める計算】
+                # 20度を超えた分の距離が、残り（20度から180度まで）に対してどれだけの比率か
+                reward_yaw = - (abs(yaw_error) - threshold_yaw) / (max_yaw - threshold_yaw)
             else:
-                # 【ボーナス】20度以内なら、ズレが少ないほど「プラス（加点）」
-                # ズレが0のときに最大「+1.0点」をもらえ、ズレるほど0点に近づきます
+                # 20度以内ならプラス（ズレ0で1.0点、20度で0.0点）
                 reward_yaw = 1.0 - (abs(yaw_error) / threshold_yaw)
 
         #print(F"episode_steps:{self.episode_steps} yaw_error:{math.degrees(yaw_error):.1f}[度] reward_yaw:{reward_yaw:.3f}")
@@ -619,19 +645,17 @@ class MiniPupperEnv(gym.Env):
             # 目標の高さに近いほど 1.0 に近づき、離れると 0 になる報酬
             height_penalty = np.exp(-((actual_z - self.min_height) ** 2) / (self.z_sigma ** 2))
         else:
+            threshold_z = self.min_height - self.z_sigma 
             # - を入れて、めりはりをつける!!
-            if actual_z <= (self.min_height-self.z_sigma):
-                #height_penalty = (actual_z - min_height) * 100.0
-                #height_penalty = (actual_z - min_height) * 150.0 * 2.0
-                #height_penalty = -1.5
-                height_penalty = -0.5
-                #height_penalty = -0.2
-                #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
+            if actual_z > threshold_z:
+                # 0.10m から 0.12m の間で 0.0 から 1.0 になる計算
+                # ※0.12mを超えて高すぎても減点したい場合は、np.clipで1.0に固定するか調整可能
+                height_penalty = (actual_z - threshold_z) / (self.min_height - threshold_z)
+                height_penalty = np.clip(height_penalty, 0.0, 1.0) # 高すぎても最大1.0で固定
             else:
-                height_penalty = (actual_z - (self.min_height-self.z_sigma)) * 10.0 * 2.0
-                #height_penalty = 0.2
-                #pass
-
+                # 0.10m から 0.05m の間で 0.0 から -1.0 になる計算
+                height_penalty = - (threshold_z - actual_z) / (threshold_z - self.limit_height)
+                height_penalty = np.clip(height_penalty, -1.0, 0.0) # 最低地上高以下は-1.0で固定
                 #print(F'compute_reward()  actual_z:{actual_z:.3f} penalty:{height_penalty:.3f}')
 
         if False:
@@ -653,19 +677,30 @@ class MiniPupperEnv(gym.Env):
             print(F'move_penalty:{move_penalty:.3f}')
 
         # 7. 【最終報酬のドッキング】
-        # 位置が合っていて（0.7）、かつ向きも合っている（0.3）ときが高得点。
-        # そこからブサイク姿勢ペナルティを引き算する
-        if self.rotate_emphance:
-            reward = (0.7 * reward_pos + 0.3 * reward_yaw) - 0.5 * tilt_penalty + height_penalty
-        else:
-            # ⭕ 最終報酬のドッキングを「位置（距離）9割」に尖らせる！
-            reward = (0.9 * reward_pos + 0.1 * reward_yaw) - 0.5 * tilt_penalty + height_penalty
+        #reward = (0.7 * reward_pos + 0.3 * reward_yaw) - 0.5 * tilt_penalty + height_penalty
+        reward = (reward_pos + reward_yaw) - 0.5 * tilt_penalty + height_penalty
+
+        self.tilt_penalty = -0.5 * tilt_penalty
+
+        self.reward_pos_av += reward_pos
+        self.reward_yaw_av += reward_yaw
 
         #生存報酬（Alive Bonus）: 転ばずに1ステップ生き延びるごとに、小さなプラス報酬（例: +1）を与えます。
         # これにより「長く立っていること」自体を学習させます。
         #if self.episode_steps % 5 ==0 and self.move_penalty == 0.0 and height_penalty >= 0.0:
-        if self.episode_steps % 5 ==0:
-            reward += 1
+        if self.stage == 2:
+            if reward_pos > 0.0 and reward_yaw > 0.0:
+                reward += 1
+                #reward += 2.0
+            else:
+                #reward -= 1.0
+                pass
+        else:
+            if reward_pos > 0.8 and reward_yaw > 0.8:
+                reward += 1
+            else:
+                reward -= 0.5
+
         #print(F'compute_reward():#2 reward:{reward:.3f}')
         return float(reward)
 
@@ -756,7 +791,8 @@ class MiniPupperEnv(gym.Env):
         if abs(roll) > 0.8 or abs(pitch) > 0.8:
             #print(f"コケたのでお説教！ roll: {abs(roll):.2f} , pitch:{abs(pitch):.2f}")
             #return True,-120.0
-            return True,-250.0
+            #return True,-250.0
+            return True,-10.0
 
         # 2. 【進化】仮想の理想位置から 1.0メートル以上 脱線したらお説教リセット！
         actual_x = self.ros.current_x
