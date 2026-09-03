@@ -17,6 +17,10 @@ Tearm2.
 $ source ~/setup-ros2-mujoco-run  
 $ cd sb3-ppo-my/mini_pupper_rl_lt  
 $ jupyter notebook  
+注) 先に、gazebo_env.py の設定確認  
+self.stage=3  
+self.beginner = False  
+self.use_2_reward=True  
 
 ##### 2. How to inference  
 
