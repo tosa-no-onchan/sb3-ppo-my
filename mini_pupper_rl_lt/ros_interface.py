@@ -14,6 +14,8 @@ from tf2_msgs.msg import TFMessage
 
 from geometry_msgs.msg import PoseArray # ⭕ PoseArray をインポート
 
+from collections import deque  # 1. ライブラリをインポート
+
 #from tf_transformations import euler_from_quaternion
 
 # /cmd_vel normalize
@@ -123,6 +125,11 @@ class MiniPupperROSInterface(Node):
         self.roll = 0.0
         self.pitch = 0.0
         self.pitch_velocity=0.0 # add by nishi 2026.8.10
+
+        # 2. 上限（例：最大5個）を設定して初期化
+        # 20msの間に届くROSのメッセージ数（100Hzなら2〜3個）より少し多めにしておけば安全です
+        self.pitch_velocity_buffer = deque(maxlen=5) 
+
         self.imu_sub = self.create_subscription(
             Imu,
             "/imu/data",
@@ -259,8 +266,27 @@ class MiniPupperROSInterface(Node):
 
         self.latest_sim_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
+        self.roll_velocity = msg.angular_velocity.x
         # Y軸の角速度（前後のシーソー運動のスピード）を取得 add by nishi 2026.8.9
+        #self.pitch_velocity = np.abs(msg.angular_velocity.y)
         self.pitch_velocity = msg.angular_velocity.y
+        self.yaw_velocity = msg.angular_velocity.z
+
+        self.roll_velocity_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
+        self.pitch_velocity_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
+        self.yaw_velocity_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
+    
+        self.pitch_velocity_buffer.append(self.pitch_velocity)
+
+        # 現在のロール・ヤオの運動エネルギー（角速度の2乗和）をプロパティとして保持
+        self.current_motion = self.roll_velocity**2 + self.yaw_velocity**2
+
+        # 2. 【新設・角度】水平からのズレ度合い（絶対値）
+        # ロール（左右の傾き）とピッチ（前後の傾き）の絶対値を保持
+        self.current_roll_error = np.abs(self.roll)
+        self.current_pitch_error = np.abs(self.pitch)
+
+        #print(F'self.pitch_velocity:{self.pitch_velocity:.3f}')
 
         #q = msg.orientation
         # quaternion -> roll pitch
@@ -301,17 +327,30 @@ class MiniPupperROSInterface(Node):
             if self.last_x is not None and self.last_y is not None:
                 dt = self.current_time - self.last_time
                 if dt > 0.001:
-                    # 前進速度
-                    self.current_vx = (self.current_x - self.last_x) / dt
+                    # ① まずは「世界（world）基準」の速度を計算する
+                    vx_world = (self.current_x - self.last_x) / dt
+                    vy_world = (self.current_y - self.last_y) / dt
 
-                    # 横移動速度 add by nishi 2026.8.8
-                    self.current_vy = (self.current_y - self.last_y) / dt
-                    
+                    # ② 🔥【重要】世界基準の速度を、現在の向き（current_yaw）を使って「機体（base_link）基準」に変換する
+                    cos_yaw = np.cos(current_yaw)
+                    sin_yaw = np.sin(current_yaw)
+
+                    # 2次元の回転行列の逆行列（転置）をかけることで、ロボットから見た前・横の速度にする
+                    self.current_vx = vx_world * cos_yaw + vy_world * sin_yaw
+                    self.current_vy = -vx_world * sin_yaw + vy_world * cos_yaw
+
+                    if False:
+                        # world 座標系速度
+                        # 前進速度
+                        self.current_vx_world = (self.current_x - self.last_x) / dt
+                        # 横移動速度 add by nishi 2026.8.8
+                        self.current_vy_world = (self.current_y - self.last_y) / dt
+
                     # 旋回速度（今の向き - 前の向き）
                     # ※-π〜+πの境界をまたぐ時のバグ防止処理
                     dyaw = current_yaw - self.last_yaw
                     dyaw = np.arctan2(np.sin(dyaw), np.cos(dyaw))
-                    self.current_vyaw = dyaw / dt
+                    self.current_vyaw_world = dyaw / dt
 
                     # ==================================================================
                     # ⭕【新考案】仮想オドメトリ（Pupperのあるべき理想位置）の累積計算
@@ -365,7 +404,12 @@ class MiniPupperROSInterface(Node):
                 #    self.roll,      # 1
                 #    self.pitch      # 1
                 #]
-                self.quat       # 4
+                self.quat,       # 4
+                [
+                    self.roll_velocity_norm,
+                    self.pitch_velocity_norm,  # 💡 Y を先に配置
+                    self.yaw_velocity_norm,    # 💡 Z を最後に配置
+                ],
             ]
         )
         return obs.astype(
@@ -392,6 +436,15 @@ class MiniPupperROSInterface(Node):
 
     def get_yaw_velocity(self):
         return getattr(self, 'current_vyaw', 0.0)
+
+    def get_pitch_velocity(self):
+        if len(self.pitch_velocity_buffer) > 0:
+            abs_pitch_vel = np.mean(self.pitch_velocity_buffer)
+            # 次の20msのためにバッファを空にする
+            self.pitch_velocity_buffer.clear()
+        else:
+            abs_pitch_vel = 0.0
+        return abs_pitch_vel
 
     #def wait(self):
     #    rclpy.spin_once(
@@ -481,5 +534,9 @@ class MiniPupperROSInterface(Node):
         self.pupper_virt_odom['x'] = 0.0
         self.pupper_virt_odom['y'] = 0.0
         self.pupper_virt_odom['yaw'] = 0.0
+
+        self.roll_velocity_norm=0.0
+        self.pitch_velocity_norm=0.0  # 💡 Y を先に配置
+        self.yaw_velocity_norm=0.0    # 💡 Z を最後に配置
 
         self.velocities=None
