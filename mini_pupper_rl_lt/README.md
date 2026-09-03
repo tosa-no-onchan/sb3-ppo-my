@@ -18,9 +18,19 @@ $ source ~/setup-ros2-mujoco-run
 $ cd sb3-ppo-my/mini_pupper_rl_lt  
 $ jupyter notebook  
 注) 先に、gazebo_env.py の設定確認  
+/cmd_vel の 3速度一致による評価方式にする。  
 self.stage=3  
 self.beginner = False  
 self.use_2_reward=True  
+220,000 steps あたりから、完走シーンが出始めると思う。  
+🎉 300ステップ完走！ 完走判定:0.1 ....  
+
+完走判定:0.1 がすべて、でるようになれば、Train OK  
+注2) Train する、/cmd_vel について。  
+def make_test_cmd(self):
+で、作っているので、自分で、変えてください。  
+複数の同じ /cmd_vel で繰り返し学習させた方が良い。乱数による作成は、学習初期の Pupper には、不向きなので、  
+おすすめしません。  
 
 ##### 2. How to inference  
 
