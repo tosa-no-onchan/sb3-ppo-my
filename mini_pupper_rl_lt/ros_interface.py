@@ -350,7 +350,7 @@ class MiniPupperROSInterface(Node):
                     # ※-π〜+πの境界をまたぐ時のバグ防止処理
                     dyaw = current_yaw - self.last_yaw
                     dyaw = np.arctan2(np.sin(dyaw), np.cos(dyaw))
-                    self.current_vyaw_world = dyaw / dt
+                    self.current_vyaw = dyaw / dt
 
                     # ==================================================================
                     # ⭕【新考案】仮想オドメトリ（Pupperのあるべき理想位置）の累積計算
@@ -427,15 +427,16 @@ class MiniPupperROSInterface(Node):
 
     # Gymのstepから呼ばれる関数を、変数横流しだけの超軽量処理にする
     def get_forward_velocity(self):
-        return getattr(self, 'current_vx', 0.0)
-        #return self.current_vx
+        #return getattr(self, 'current_vx', 0.0)
+        return self.current_vx
 
     def get_side_velocity(self):
-        return getattr(self, 'current_vy', 0.0)
-        #return self.current_vy
+        #return getattr(self, 'current_vy', 0.0)
+        return self.current_vy
 
     def get_yaw_velocity(self):
-        return getattr(self, 'current_vyaw', 0.0)
+        #return getattr(self, 'current_vyaw', 0.0)
+        return self.current_vyaw
 
     def get_pitch_velocity(self):
         if len(self.pitch_velocity_buffer) > 0:
