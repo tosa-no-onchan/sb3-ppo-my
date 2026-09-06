@@ -339,13 +339,6 @@ class MiniPupperROSInterface(Node):
                     self.current_vx = vx_world * cos_yaw + vy_world * sin_yaw
                     self.current_vy = -vx_world * sin_yaw + vy_world * cos_yaw
 
-                    if False:
-                        # world 座標系速度
-                        # 前進速度
-                        self.current_vx_world = (self.current_x - self.last_x) / dt
-                        # 横移動速度 add by nishi 2026.8.8
-                        self.current_vy_world = (self.current_y - self.last_y) / dt
-
                     # 旋回速度（今の向き - 前の向き）
                     # ※-π〜+πの境界をまたぐ時のバグ防止処理
                     dyaw = current_yaw - self.last_yaw
