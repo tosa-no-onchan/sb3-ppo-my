@@ -24,7 +24,6 @@ PITCH_IDX = ROLL_IDX + 1            # 16
 
 # 例：基準姿勢（Nominal Pose）からの最大変化量を 0.5 rad（約28.6度）に制限する場合
 MAX_ACTION_RAD = 0.5        # ここが、ベース。あくまで、 Gazebo 上の話!!
-#MAX_ACTION_RAD = 0.8
 #MAX_ACTION_RAD = 1.0        # 実機と同じ足の速度にするなら、こちら
 
 class MiniPupperEnv(gym.Env):
@@ -161,8 +160,7 @@ class MiniPupperEnv(gym.Env):
         self.reward_vyaw_av=np.array([])
         self.reward_av=np.array([])
 
-        self.prev_pos_dist = None   # add by nishi 2026.9.4
-        self.prev_yaw_error_abs = None # add by nishi 2026.9.4
+        self.prev_reward_vx=0.0 # add by nishi 2026.9.6
 
         # 既存のシード初期化
         super().reset(seed=seed)
@@ -487,6 +485,9 @@ class MiniPupperEnv(gym.Env):
         #
         self.ros.wait_for_gazebo_steps(target_steps=WAITE_STEP)
 
+        # 💡 ここで、このステップ間に溜まった速度データを平均化＆確定させる！
+        self.ros.update_step_observations()
+
         #
         # Observation
         #
@@ -744,47 +745,55 @@ class MiniPupperEnv(gym.Env):
                 # ※ 以前の位置・向き報酬の最大値「3.0」とスケールを合わせるため
                 total_vel_reward = reward_vx + reward_vy + reward_vz
             else:
-                if True:
-                    # -------------------------------------------------------------
-                    # 1. 前進速度 (vx) の評価 [目標速度：self.cmd_vel]
-                    # -------------------------------------------------------------
-                    if self.cmd_vel[0] > 0.01:
-                        # --- 【ケースA：前進指令が出ているとき】 ---
-                        if actual_vx < -0.01:
-                            # ① 【既存の対策】バックサボりは一撃で大赤集（激辛ペナルティ）
-                            reward_vx = -20.0 * (actual_vx ** 2)
-                        else:
-                            # ② 【今回の新兵器】目標速度との乖離（ error = 0.5 - actual_vx ）をチェック
-                            vx_error = self.cmd_vel[0] - actual_vx
-                            
-                            if vx_error > 0.15:  # 目標0.5に対して、0.35未満でダラダラサボっている場合
-                                # 乖離が大きければ大きいほど、容赦なくマイナス（罰金）にする
-                                # 例：その場で立ちすくみ（actual_vx=0.0）の場合、error=0.5 -> -5.0 * 0.25 = -1.25点（毎ステップ）
-                                reward_vx = -5.0 * (vx_error ** 2)
-                            else:
-                                # 目標の近く（0.35以上）まで頑張って加速してきたら、初めてプラスのおやつ（ガウス）をあげる
-                                base_reward_vx = np.exp(-(vx_error ** 2) / 0.25)
-                                weight_vx = np.abs(self.cmd_vel[0]) / MAX_LIN_X
-                                reward_vx = base_reward_vx * weight_vx
+                # -------------------------------------------------------------
+                # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
+                # -------------------------------------------------------------
+                base_reward_vx = np.exp(-error_vx / 0.25)  # 0.0 〜 1.0
+                # 🔥 符号が逆（逆走）なら「適切な罰金（-0.1）」
+                if (self.cmd_vel[0] > 0.01 and actual_vx < -0.05) or (self.cmd_vel[0] < -0.01 and actual_vx > 0.05):
+                    # 命令が前進なのに、実際は後ろに走っている（バックサボり）の時
+                    # 固定の -0.10 ではなく、逆走すればするほど絶望的に減点されるようにする
+                    #reward_vx = -5.0 * (actual_vx ** 2) 
+                    if self.prev_reward_vx < 0.0:
+                        reward_vx = self.prev_reward_vx - 0.02
                     else:
-                        # --- 【ケースB：停止指令（0.0）のとき】 ---
-                        reward_vx = -1.0 * (actual_vx ** 2)
+                        reward_vx = -0.1
                 else:
-                    # -------------------------------------------------------------
-                    # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
-                    # -------------------------------------------------------------
-                    base_reward_vx = np.exp(-error_vx / 0.25)  # 0.0 〜 1.0
                     # 指令速度の絶対値を重み（アメの量）にする
                     # b. cmd_vel の値の大きさに応じて、報酬に差をつける
-                    #weight_vx = np.abs(self.cmd_vel[0])
                     weight_vx = np.abs(self.cmd_vel[0])/MAX_LIN_X
-                    reward_vx = base_reward_vx * weight_vx
-                    # 🔥 符号が逆（逆走）なら「適切な罰金（-0.1）」
-                    if (self.cmd_vel[0] > 0.01 and actual_vx < -0.05) or (self.cmd_vel[0] < -0.01 and actual_vx > 0.05):
-                        # 命令が前進なのに、実際は後ろに走っている（バックサボり）の時
-                        # 固定の -0.10 ではなく、逆走すればするほど絶望的に減点されるようにする
-                        reward_vx = -5.0 * (actual_vx ** 2) 
-                        #reward_vx = -0.1
+                    #実際のAction の 前進と後退で、Reward に少し差をつける。
+                    weight_vx_foward=1.0
+                    if actual_vx < 0.0:
+                        #weight_vx_foward=3.3
+                        #weight_vx_foward=4.0
+                        #weight_vx_foward=0.3
+                        weight_vx_foward=0.25
+
+                    # 💡 【新兵器】これまでの成績から動的に倍率（ブースター）を計算する
+                    if self.reward_vx_av.size > 0:
+                        # 1. これまでのステップで「プラスだった回数」と「マイナス（罰金）だった回数」をカウント
+                        positive_counts = np.sum(self.reward_vx_av > 0)
+                        negative_counts = np.sum(self.reward_vx_av < 0)
+                        
+                        # 2. プラスの割合（0.0 〜 1.0）を算出
+                        total_counts = positive_counts + negative_counts
+                        pos_ratio = positive_counts / total_counts if total_counts > 0 else 0.5
+                        
+                        # 3. 割合に応じて、倍率を「0.8倍（調子悪い）」〜「1.5倍（絶好調）」に動的変化させる
+                        # 例：プラスばかりなら 0.8 + 0.7 * 1.0 = 1.5倍！
+                        #     マイナスばかりなら 0.8 + 0.7 * 0.0 = 0.8倍にセーブ
+                        dynamic_multiplier = 0.8 + (0.7 * pos_ratio)
+                    else:
+                        dynamic_multiplier = 1.0 # 最初の1歩目は等倍スタート
+                    
+                    # 4. コンボシステムと動的ブースターをハイブリッドに掛け算！
+                    if self.prev_reward_vx > 0.0:
+                        reward_vx = base_reward_vx * weight_vx * 1.5 * dynamic_multiplier * weight_vx_foward
+                    else:
+                        reward_vx = base_reward_vx * weight_vx  * 0.4 * dynamic_multiplier * weight_vx_foward
+
+                self.prev_reward_vx = reward_vx
 
                 # -------------------------------------------------------------
                 # 2. 横移動速度 (vy) の評価 [目標が大きいほど高報酬]
@@ -806,16 +815,15 @@ class MiniPupperEnv(gym.Env):
                     base_reward_vz = np.exp(-error_vz / 0.25)
                     weight_vz = np.abs(self.cmd_vel[2]) / MAX_ANG_Z  # 100%満点が出るリニア配点
                     reward_vz = base_reward_vz * weight_vz
-                    
                     # 逆方向に回っていたら罰金
                     if self.cmd_vel[2] * actual_vyaw < 0:
                         reward_vz = -0.1
                 else:
                     # 【ケースB：旋回指令が「ゼロ（まっすぐ進め）」のとき】★ここが今回の本命
-                    # 勝手に動いた量（首振りの激しさ）に比例して、マイナス（罰金）を食らわせる
-                    # 例: actual_vyaw = 0.5 rad/s でブレたら、-1.0 * 0.25 = -0.25点
-                    if np.abs(actual_vyaw) > 0.05:  # わずかなノイズ（0.05以内）は許容する優しい設計
-                        reward_vz = -1.0 * (actual_vyaw ** 2)
+                    if np.abs(actual_vyaw) > 0.05:
+                        # 🔥 係数を 1.0 から 0.05 に激減させ、二乗の爆発力を優しく抑える！
+                        # 例: actual_vyaw = 2.0 (激しいブレ) でも、-0.05 * 4 = -0.2点 の軽いお叱りで済む
+                        reward_vz = -0.05 * (actual_vyaw ** 2)
                     else:
                         reward_vz = 0.0  # ピタッとまっすぐ向いていれば、余計なおやつはあげずに0点（不労所得ゼロ）
 
@@ -829,9 +837,9 @@ class MiniPupperEnv(gym.Env):
                     stop_error = (actual_vx**2) + (actual_vy**2) + (actual_vyaw**2)
                     total_vel_reward = 0.2 * np.exp(-stop_error / 0.1)
                 else:
-                    # 最初の、1.0[秒] は、報酬をスロースタートする
-                    if self.episode_steps <= 50:
-                        ratio = float(self.episode_steps) / 50.0
+                    # 最初の、0.5[秒] は、報酬をスロースタートする
+                    if self.episode_steps <= 25:
+                        ratio = float(self.episode_steps) / 25.0
                         if reward_vx > 0:
                             reward_vx = reward_vx * ratio
                         if reward_vy > 0:

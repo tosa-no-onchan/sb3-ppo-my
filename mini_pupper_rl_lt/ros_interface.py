@@ -83,6 +83,10 @@ class MiniPupperROSInterface(Node):
         self.joint_position = np.zeros(12)
         self.joint_velocity = np.zeros(12)
 
+        self.roll_velocity_norm = 0.0
+        self.pitch_velocity_norm = 0.0
+        self.yaw_velocity_norm = 0.0
+
         self.joint_sub = self.create_subscription(
             JointState,
             "/joint_states",
@@ -172,8 +176,19 @@ class MiniPupperROSInterface(Node):
         self.last_x = None
         self.last_y = None
         self.last_time = None
+
+        # 💡 ステップ間のデータを一時保存するリスト（固定長ではなく、入ってきた分だけ貯める）
+        self.step_joint_vel_list = []
+        self.step_roll_vel_list = []
+        self.step_pitch_vel_list = []
+        self.step_yaw_vel_list = []
+        self.step_vx_list = []
+        self.step_vy_list = []
+        self.step_vyaw_list = []
+
         self.current_vx = 0.0
         self.current_vy = 0.0
+        self.current_vyaw = 0.0
 
         self.latest_sim_time=0.0
 
@@ -232,30 +247,24 @@ class MiniPupperROSInterface(Node):
             sorted_positions = msg.position[:12]
             sorted_velocities = msg.velocity[:12]
 
-        joint_position = np.array(
-            #msg.position[:12],
-            sorted_positions,
-            dtype=np.float32
-        )
+        # 1. 【位置データ】はワンショット最新値のままでOK
+        joint_position = np.array(sorted_positions,dtype=np.float32)
         # normalize add by nishi 2026.7.27
         clipped_joints = np.clip(joint_position, -MAX_JOINT_RAD, MAX_JOINT_RAD)
         clipped_joints20 = np.clip(joint_position, -MAX_JOINT_RAD20, MAX_JOINT_RAD20)
         self.joint_position = clipped_joints / MAX_JOINT_RAD
         # -20度 から +20度 の部分の補正
         self.joint_position[[0,3,6,9]] = clipped_joints20[[0,3,6,9]] / MAX_JOINT_RAD20
-        #self.joint_position[0] = clipped_joints20[0] / MAX_JOINT_RAD20
-        #self.joint_position[3] = clipped_joints20[3] / MAX_JOINT_RAD20
-        #self.joint_position[6] = clipped_joints20[6] / MAX_JOINT_RAD20
-        #self.joint_position[9] = clipped_joints20[9] / MAX_JOINT_RAD20
 
-        joint_velocity = np.array(
-            #msg.velocity[:12],
-            sorted_velocities,
-            dtype=np.float32
-        )
+        # 2. 【速度データ】はステップ間の平均を取るため、正規化した値をリストに貯める
+        joint_velocity = np.array(sorted_velocities,dtype=np.float32)
         # normalize add by nishi 2026.7.27
         clipped_vel = np.clip(joint_velocity, -MAX_JOINT_VEL, MAX_JOINT_VEL)
-        self.joint_velocity = clipped_vel / MAX_JOINT_VEL
+
+        #self.joint_velocity = clipped_vel / MAX_JOINT_VEL
+        normalized_vel = clipped_vel / MAX_JOINT_VEL
+        # 💡 リストに突っ込む（蓄積）
+        self.step_joint_vel_list.append(normalized_vel)
 
     def imu_callback(self,msg):
         self.quat[0] = msg.orientation.x
@@ -266,16 +275,21 @@ class MiniPupperROSInterface(Node):
 
         self.latest_sim_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
+        # 生の角速度を取得
         self.roll_velocity = msg.angular_velocity.x
-        # Y軸の角速度（前後のシーソー運動のスピード）を取得 add by nishi 2026.8.9
-        #self.pitch_velocity = np.abs(msg.angular_velocity.y)
         self.pitch_velocity = msg.angular_velocity.y
         self.yaw_velocity = msg.angular_velocity.z
 
-        self.roll_velocity_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
-        self.pitch_velocity_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
-        self.yaw_velocity_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
-    
+        # 正規化を施す
+        r_vel_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
+        p_vel_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
+        y_vel_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
+
+            # 💡 リストに突っ込む（蓄積）
+        self.step_roll_vel_list.append(r_vel_norm)
+        self.step_pitch_vel_list.append(p_vel_norm)
+        self.step_yaw_vel_list.append(y_vel_norm)
+
         self.pitch_velocity_buffer.append(self.pitch_velocity)
 
         # 現在のロール・ヤオの運動エネルギー（角速度の2乗和）をプロパティとして保持
@@ -285,25 +299,6 @@ class MiniPupperROSInterface(Node):
         # ロール（左右の傾き）とピッチ（前後の傾き）の絶対値を保持
         self.current_roll_error = np.abs(self.roll)
         self.current_pitch_error = np.abs(self.pitch)
-
-        #print(F'self.pitch_velocity:{self.pitch_velocity:.3f}')
-
-        #q = msg.orientation
-        # quaternion -> roll pitch
-        #sinr = 2*(q.w*q.x + q.y*q.z)
-        #cosr = 1 - 2*(q.x*q.x + q.y*q.y)
-        #self.roll = np.arctan2(
-        #    sinr,
-        #    cosr
-        #)
-        #sinp = 2*(q.w*q.y - q.z*q.x)
-        #self.pitch = np.arcsin(
-        #    np.clip(
-        #        sinp,
-        #        -1.0,
-        #        1.0
-        #    )
-        #)
 
     def pose_callback(self, msg):
         # poses配列の最初の1個がロボット本体の座標
@@ -336,14 +331,25 @@ class MiniPupperROSInterface(Node):
                     sin_yaw = np.sin(current_yaw)
 
                     # 2次元の回転行列の逆行列（転置）をかけることで、ロボットから見た前・横の速度にする
-                    self.current_vx = vx_world * cos_yaw + vy_world * sin_yaw
-                    self.current_vy = -vx_world * sin_yaw + vy_world * cos_yaw
+                    #self.current_vx = vx_world * cos_yaw + vy_world * sin_yaw
+                    # add by nishi 2026.9.7
+                    tmp_vx = vx_world * cos_yaw + vy_world * sin_yaw
+                    #self.current_vy = -vx_world * sin_yaw + vy_world * cos_yaw
+                    # add by nishi 2026.9.7
+                    tmp_vy = -vx_world * sin_yaw + vy_world * cos_yaw
 
                     # 旋回速度（今の向き - 前の向き）
                     # ※-π〜+πの境界をまたぐ時のバグ防止処理
                     dyaw = current_yaw - self.last_yaw
                     dyaw = np.arctan2(np.sin(dyaw), np.cos(dyaw))
-                    self.current_vyaw = dyaw / dt
+                    #self.current_vyaw = dyaw / dt
+                    # add by nishi 2026.9.7
+                    tmp_vyaw = dyaw / dt
+
+                    # 💡 バッファに突っ込む add by nishi 2026.9.8
+                    self.step_vx_list.append(tmp_vx)
+                    self.step_vy_list.append(tmp_vy)
+                    self.step_vyaw_list.append(tmp_vyaw)
 
                     # ==================================================================
                     # ⭕【新考案】仮想オドメトリ（Pupperのあるべき理想位置）の累積計算
@@ -384,10 +390,51 @@ class MiniPupperROSInterface(Node):
             clipped_angular_z / MAX_ANG_Z
         ])
 
+    def update_step_observations(self):
+        """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
+        # 1. 関節速度の一括平均
+        if len(self.step_joint_vel_list) > 0:
+            # axis=0 で縦方向に平均を取ることで、12次元配列が返ってきます
+            self.joint_velocity = np.mean(self.step_joint_vel_list, axis=0)
+            self.step_joint_vel_list.clear() # 次のステップのために空にする
+            
+        # 2. IMU角速度の一括平均
+        if len(self.step_roll_vel_list) > 0:
+            self.roll_velocity_norm = np.mean(self.step_roll_vel_list)
+            self.pitch_velocity_norm = np.mean(self.step_pitch_vel_list)
+            self.yaw_velocity_norm = np.mean(self.step_yaw_vel_list)
+            
+            # 平均化した角速度ベースで現在の運動エネルギーを再計算（ノイズレス！）
+            # ※元の単位に戻すため 0.15 で割っています
+            r_vel_raw = self.roll_velocity_norm / 0.15
+            y_vel_raw = self.yaw_velocity_norm / 0.15
+            self.current_motion = r_vel_raw**2 + y_vel_raw**2
+            
+            # リストのクリア
+            self.step_roll_vel_list.clear()
+            self.step_pitch_vel_list.clear()
+            self.step_yaw_vel_list.clear()
+
     # ------------------------
     # observation
     # ------------------------
     def get_observation(self):
+
+        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
+        # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
+        if len(self.step_vx_list) > 0:
+            self.current_vx = np.mean(self.step_vx_list)
+            self.current_vy = np.mean(self.step_vx_list)
+            self.current_vyaw = np.mean(self.step_vyaw_list)
+            
+            # 🔥 次のステップのために、リストを空にしてリセットする！
+            self.step_vx_list.clear()
+            self.step_vy_list.clear()
+            self.step_vyaw_list.clear()
+        else:
+            # 万が一データが届いていなければ、前回の値をキープ（または0）
+            pass
+
         obs = np.concatenate(
             [
                 self.cmd_vel_norm,     # 3
@@ -412,6 +459,14 @@ class MiniPupperROSInterface(Node):
     # action
     # ------------------------
     def send_action(self,action):
+
+        # 👑 【超重要】：新しい命令を出す「直前」に、溜まっていた古い過去のデータをすべて全消去する！
+        self.step_vx_list.clear()
+        self.step_joint_vel_list.clear()
+        self.step_roll_vel_list.clear()
+        self.step_pitch_vel_list.clear()
+        self.step_yaw_vel_list.clear()
+
         msg = Float64MultiArray()
         msg.data = action.tolist()
         self.command_pub.publish(
@@ -523,6 +578,12 @@ class MiniPupperROSInterface(Node):
         self.last_x = None   # 速度計算の基準も一旦クリア
         self.last_y = None   # 速度計算の基準も一旦クリア
         self.last_time = None
+
+        # add by nishi 2026.9.8
+        # 🔥 次のステップのために、リストを空にしてリセットする！
+        self.step_vx_list.clear()
+        self.step_vy_list.clear()
+        self.step_vyaw_list.clear()
 
         # ⭕【追加】ワープ時に仮想オドメトリも完全に原点へリセット
         self.pupper_virt_odom['x'] = 0.0
