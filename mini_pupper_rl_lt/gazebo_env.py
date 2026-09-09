@@ -485,9 +485,6 @@ class MiniPupperEnv(gym.Env):
         #
         self.ros.wait_for_gazebo_steps(target_steps=WAITE_STEP)
 
-        # 💡 ここで、このステップ間に溜まった速度データを平均化＆確定させる！
-        self.ros.update_step_observations()
-
         #
         # Observation
         #

@@ -420,6 +420,9 @@ class MiniPupperROSInterface(Node):
     # ------------------------
     def get_observation(self):
 
+        # 💡 ここで、このステップ間に溜まった速度データを平均化＆確定させる！
+        self.update_step_observations()
+
         """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
         # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
         if len(self.step_vx_list) > 0:
