@@ -395,6 +395,27 @@ class MiniPupperROSInterface(Node):
 
     def update_step_observations(self):
         """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
+        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
+        # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
+        if len(self.step_vx_list) > 0:
+            #print(F'self.step_vx_list:{len(self.step_vx_list)}')
+            i=len(self.step_vx_list)
+            i = 2 if i > 3 else 0
+            self.current_vx = np.mean(self.step_vx_list[i:])
+            self.current_vy = np.mean(self.step_vx_list[i:])
+            self.current_vyaw = np.mean(self.step_vyaw_list[i:])
+            
+            # 🔥 次のステップのために、リストを空にしてリセットする！
+            self.step_vx_list.clear()
+            self.step_vy_list.clear()
+            self.step_vyaw_list.clear()
+        else:
+            # 万が一データが届いていなければ、前回の値をキープ（または0）
+            self.current_vx = 0.0
+            self.current_vy = 0.0
+            self.current_vyaw = 0.0
+            #pass
+
         # 1. 関節速度の一括平均
         if len(self.step_joint_vel_list) > 0:
             i = len(self.step_joint_vel_list)
@@ -430,27 +451,6 @@ class MiniPupperROSInterface(Node):
         # 💡 ここで、このステップ間に溜まった速度データを平均化＆確定させる！
         self.update_step_observations()
 
-        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
-        # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
-        if len(self.step_vx_list) > 0:
-            #print(F'self.step_vx_list:{len(self.step_vx_list)}')
-            i=len(self.step_vx_list)
-            if i > 3:
-                i=2
-            else:
-                i=0
-            self.current_vx = np.mean(self.step_vx_list[i:])
-            self.current_vy = np.mean(self.step_vx_list[i:])
-            self.current_vyaw = np.mean(self.step_vyaw_list[i:])
-            
-            # 🔥 次のステップのために、リストを空にしてリセットする！
-            self.step_vx_list.clear()
-            self.step_vy_list.clear()
-            self.step_vyaw_list.clear()
-        else:
-            # 万が一データが届いていなければ、前回の値をキープ（または0）
-            pass
-
         obs = np.concatenate(
             [
                 self.cmd_vel_norm,     # 3
@@ -478,6 +478,8 @@ class MiniPupperROSInterface(Node):
 
         # 👑 【超重要】：新しい命令を出す「直前」に、溜まっていた古い過去のデータをすべて全消去する！
         self.step_vx_list.clear()
+        self.step_vy_list.clear()
+        self.step_vyaw_list.clear()
         self.step_joint_vel_list.clear()
         self.step_roll_vel_list.clear()
         self.step_pitch_vel_list.clear()
@@ -605,10 +607,18 @@ class MiniPupperROSInterface(Node):
         self.step_vy_list.clear()
         self.step_vyaw_list.clear()
 
+        self.step_joint_vel_list.clear()
+        self.step_roll_vel_list.clear()
+        self.step_pitch_vel_list.clear()
+        self.step_yaw_vel_list.clear()
+
         # ⭕【追加】ワープ時に仮想オドメトリも完全に原点へリセット
         self.pupper_virt_odom['x'] = 0.0
         self.pupper_virt_odom['y'] = 0.0
         self.pupper_virt_odom['yaw'] = 0.0
+
+        self.joint_position = np.zeros(12)
+        self.joint_velocity = np.zeros(12)
 
         self.roll_velocity_norm=0.0
         self.pitch_velocity_norm=0.0  # 💡 Y を先に配置
