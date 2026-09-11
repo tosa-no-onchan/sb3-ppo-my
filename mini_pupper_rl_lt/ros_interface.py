@@ -371,6 +371,9 @@ class MiniPupperROSInterface(Node):
                     self.pupper_virt_odom['x'] += (cmd_vx * cos_v - cmd_vy * sin_v) * dt    # [ms] * dt -> [m]
                     self.pupper_virt_odom['y'] += (cmd_vx * sin_v + cmd_vy * cos_v) * dt    # [ms] * dt -> [m]
 
+                    self.current_vx_world=vx_world
+                    self.current_vy_world=vy_world
+
             self.last_x = self.current_x
             self.last_y = self.current_y
             self.last_z = self.current_z
@@ -394,15 +397,19 @@ class MiniPupperROSInterface(Node):
         """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
         # 1. 関節速度の一括平均
         if len(self.step_joint_vel_list) > 0:
+            i = len(self.step_joint_vel_list)
+            i = 2 if i > 3 else 0
             # axis=0 で縦方向に平均を取ることで、12次元配列が返ってきます
-            self.joint_velocity = np.mean(self.step_joint_vel_list, axis=0)
+            self.joint_velocity = np.mean(self.step_joint_vel_list[i:], axis=0)
             self.step_joint_vel_list.clear() # 次のステップのために空にする
             
         # 2. IMU角速度の一括平均
         if len(self.step_roll_vel_list) > 0:
-            self.roll_velocity_norm = np.mean(self.step_roll_vel_list)
-            self.pitch_velocity_norm = np.mean(self.step_pitch_vel_list)
-            self.yaw_velocity_norm = np.mean(self.step_yaw_vel_list)
+            i = len(self.step_roll_vel_list)
+            i = 2 if i > 3 else 0
+            self.roll_velocity_norm = np.mean(self.step_roll_vel_list[i:])
+            self.pitch_velocity_norm = np.mean(self.step_pitch_vel_list[i:])
+            self.yaw_velocity_norm = np.mean(self.step_yaw_vel_list[i:])
             
             # 平均化した角速度ベースで現在の運動エネルギーを再計算（ノイズレス！）
             # ※元の単位に戻すため 0.15 で割っています
@@ -426,9 +433,15 @@ class MiniPupperROSInterface(Node):
         """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
         # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
         if len(self.step_vx_list) > 0:
-            self.current_vx = np.mean(self.step_vx_list)
-            self.current_vy = np.mean(self.step_vx_list)
-            self.current_vyaw = np.mean(self.step_vyaw_list)
+            #print(F'self.step_vx_list:{len(self.step_vx_list)}')
+            i=len(self.step_vx_list)
+            if i > 3:
+                i=2
+            else:
+                i=0
+            self.current_vx = np.mean(self.step_vx_list[i:])
+            self.current_vy = np.mean(self.step_vx_list[i:])
+            self.current_vyaw = np.mean(self.step_vyaw_list[i:])
             
             # 🔥 次のステップのために、リストを空にしてリセットする！
             self.step_vx_list.clear()
@@ -577,6 +590,10 @@ class MiniPupperROSInterface(Node):
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_vyaw = 0.0
+
+        self.current_vx_world=0.0
+        self.current_vy_world=0.0
+
         self.last_yaw = 0.0  # ⭕ ここが最重要！古いヨコ向きの記憶を消去
         self.last_x = None   # 速度計算の基準も一旦クリア
         self.last_y = None   # 速度計算の基準も一旦クリア
