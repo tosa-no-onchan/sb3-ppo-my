@@ -78,6 +78,7 @@ class MiniPupperEnv(gym.Env):
 
         self.initial_pose = self.stand_pose
 
+        self.episode=0
         # ⭕【追加】1エピソードの上限を500ステップ（約5秒）に強制設定
         #self._max_episode_steps = 500  # 0.01
         #self._max_episode_steps = 250   # 0.02
@@ -144,6 +145,9 @@ class MiniPupperEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         #print(F"MiniPupperEnv::reset() called!")
+        self.episode +=1
+        if self.episode > 100:
+            self.episode=1
         # リセット時にカウンターをゼロに戻す
         self.episode_steps = 0
         self.next_bounus_steps = self._max_episode_steps
@@ -606,14 +610,14 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f"🎉 {self._max_episode_steps}ステップ完走！ 完走判定:{bonus:.2f} reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度)")
-                print(f"🎉 {self.episode_steps}ステップ完走！ reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f"🎉 {self.episode_steps}ステップ完走！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
 
         elif terminated:
             self.reward_pos_av /= self.episode_steps
             self.reward_yaw_av /= self.episode_steps
 
             if self.beginner==True and self.use_2_reward == False:
-                print(f" 中断 {self.episode_steps}ステップ！ reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} velocity_penalty:{-velocity_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} velocity_penalty:{-velocity_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
             else:
                 if self.reward_av.size > 0:
                     sum_reward = np.sum(self.reward_av)
@@ -658,7 +662,7 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f" 中断 {self.episode_steps}ステップ！ reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度) max_vx:{max_vx:.2f} vy:{max_vy:.2f} vyaw:{max_vyaw:.2f}")
-                print(f" 中断 {self.episode_steps}ステップ！ reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
 
         #print(F"steps:{self.episode_steps} reward:{reward:.2f}")
 
@@ -727,37 +731,39 @@ class MiniPupperEnv(gym.Env):
             self.actual_vy_sum += actual_vy
             self.actual_vyaw_sum += actual_vyaw
 
-            # 👑 ゼロ除算ガード
-            if self.episode_steps > 0:
-                avarge_vx = self.actual_vx_sum / self.episode_steps
-                avarge_vy = self.actual_vy_sum / self.episode_steps
-                avarge_vyaw = self.actual_vyaw_sum / self.episode_steps
-            else:
-                avarge_vx = actual_vx
-                avarge_vy = actual_vy
-                avarge_vyaw = actual_vyaw
+            avarge_vx = self.actual_vx_sum / self.episode_steps
+            avarge_vy = self.actual_vy_sum / self.episode_steps
+            avarge_vyaw = self.actual_vyaw_sum / self.episode_steps
 
-            error_vx = (self.cmd_vel[0] - avarge_vx) ** 2
-            error_vy = (self.cmd_vel[1] - avarge_vy) ** 2
-            error_vz = (self.cmd_vel[2] - avarge_vyaw) ** 2  # 回転速度
+            use_vx = actual_vx
+            use_vy = actual_vy
+            use_vyaw = actual_vyaw
+
+            #print(F'avarge_vx:{avarge_vx:.3f}')
+            error_vx = (self.cmd_vel[0] - use_vx) ** 2
+            error_vy = (self.cmd_vel[1] - use_vy) ** 2
+            error_vz = (self.cmd_vel[2] - use_vyaw) ** 2  # 回転速度
 
             # -------------------------------------------------------------
             # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
             # -------------------------------------------------------------
-            #base_reward_vx = np.exp(-error_vx / 0.25)  # 0.0 〜 1.0 ワイド
-            base_reward_vx = np.exp(-error_vx / 0.1)  # 0.0 〜 1.0 ナロー
+            #base_reward_vx = np.exp(-error_vx / 0.1)  # 1.0 ナロー
+            base_reward_vx = np.exp(-error_vx / 0.25)  # 0.25 ワイド
+            # 符号が逆
+            if (self.cmd_vel[0] > 0.0 and use_vx < 0.0) or (self.cmd_vel[0] < 0.0 and use_vx > 0.0):
+                base_reward_vx *= -1.5
+
             # 指令速度の絶対値を重み（アメの量）にする
             # b. cmd_vel の値の大きさに応じて、報酬に差をつける
             weight_vx = np.abs(self.cmd_vel[0])/MAX_LIN_X
             #実際のAction の 前進と後退で、Reward に少し差をつける。
             weight_vx_foward=1.0
             if actual_vx < 0.0:
-                #weight_vx_foward=3.3
-                #weight_vx_foward=4.0
                 #weight_vx_foward=0.3
-                weight_vx_foward=0.25
-            
+                #weight_vx_foward=0.25
+                pass
             reward_vx = base_reward_vx * weight_vx * weight_vx_foward
+
             if not self.beginner:
                 if reward_vx > 0.0 and abs(self.cmd_vel[0]) > 0.0:
                     #reward_vx *= reward_pos
@@ -771,7 +777,7 @@ class MiniPupperEnv(gym.Env):
             weight_vy = np.abs(self.cmd_vel[1])
             reward_vy = base_reward_vy * weight_vy
             # 🔥 符号が逆なら「適切な罰金（-0.1）」
-            if self.cmd_vel[1] * actual_vy < 0:
+            if self.cmd_vel[1] * use_vy < 0:
                 reward_vy = -0.1
                 #reward_vy = 0.0
 
@@ -782,21 +788,28 @@ class MiniPupperEnv(gym.Env):
                 # 【ケースA：旋回指令が出ているとき】
                 base_reward_vz = np.exp(-error_vz / 0.25)
                 weight_vz = np.abs(self.cmd_vel[2]) / MAX_ANG_Z  # 100%満点が出るリニア配点
+                # 符号が逆
+                if (self.cmd_vel[2] > 0.0 and use_vyaw < 0.0) or (self.cmd_vel[2] < 0.0 and use_vyaw > 0.0):
+                    base_reward_vz *= -1.1
                 reward_vz = base_reward_vz * weight_vz
-                # 逆方向に回っていたら罰金
-                if self.cmd_vel[2] * avarge_vyaw < 0:
-                    reward_vz = -0.1
             else:
                 # 【ケースB：旋回指令が「ゼロ（まっすぐ進め）」のとき】★ここが今回の本命
-                if np.abs(avarge_vyaw) > 0.05:
-                    # 🔥 係数を 1.0 から 0.05 に激減させ、二乗の爆発力を優しく抑える！
-                    # 例: actual_vyaw = 2.0 (激しいブレ) でも、-1.0 * 4 = -0.2点 の軽いお叱りで済む
-                    # cmd_vel[2]=0.0 の時、まっすぐ進む調整。曲がるときは、-係数を より小さくする。
-                    #reward_vz = -1.0 * (actual_vyaw ** 2)
-                    #reward_vz = -0.05 * (actual_vyaw ** 2)     # 最初の 300step 完走 OK
-                    #reward_vz = -0.5 * (avarge_vyaw ** 2)
-                    #reward_vz = -0.6 * (avarge_vyaw ** 2)
-                    reward_vz = -0.7 * (avarge_vyaw ** 2)
+                #if np.abs(avarge_vyaw) > 0.05:
+                if np.abs(use_vyaw) > 0.05:
+                    if True:
+                        sigma=1.0
+                        reward_vz = (1.0 - np.exp(-(use_vyaw ** 2) / (2 * (sigma ** 2)))) * -1.8
+                        #reward_vz = (1.0 - np.exp(-(avarge_vyaw ** 2) / (2 * (sigma ** 2)))) * -1.8
+                    else:
+                        # 🔥 係数を 1.0 から 0.05 に激減させ、二乗の爆発力を優しく抑える！
+                        # 例: actual_vyaw = 2.0 (激しいブレ) でも、-1.0 * 4 = -0.2点 の軽いお叱りで済む
+                        # cmd_vel[2]=0.0 の時、まっすぐ進む調整。曲がるときは、-係数を より小さくする。
+                        #reward_vz = -1.0 * (use_vyaw ** 2)
+                        #reward_vz = -0.05 * (use_vyaw ** 2)     # 最初の 300step 完走 OK
+                        #reward_vz = -0.5 * (use_vyaw ** 2)
+                        #reward_vz = -0.6 * (use_vyaw ** 2)
+                        reward_vz = -0.7 * (use_vyaw ** 2)
+                        #reward_vz = -1.0 * (use_vyaw ** 2)
                 else:
                     # 前後に少しだけ動く動作の繰り返しがでたら、下記 0.0 を復活させる
                     reward_vz = 0.0  # ピタッとまっすぐ向いていれば、余計なおやつはあげずに0点（不労所得ゼロ）
@@ -818,7 +831,7 @@ class MiniPupperEnv(gym.Env):
             # 「正しく静止できている」ことを褒めるために、一律で「静止ボーナス」を支給します。
             if self.cmd_vel[0] == 0.0 and self.cmd_vel[1] == 0.0 and self.cmd_vel[2] == 0.0:
                 # 綺麗にピタッと止まっていれば最大 0.2 点をあげる（値は調整可能です）
-                stop_error = (actual_vx**2) + (actual_vy**2) + (actual_vyaw**2)
+                stop_error = (use_vx**2) + (use_vy**2) + (use_vyaw**2)
                 total_vel_reward = 0.2 * np.exp(-stop_error / 0.1)
             else:
                 # 最初の、0.5[秒] は、報酬をスロースタートする
@@ -836,18 +849,19 @@ class MiniPupperEnv(gym.Env):
             self.reward_vx_av = np.append(self.reward_vx_av,reward_vx)
             self.reward_vy_av = np.append(self.reward_vy_av,reward_vy)
             self.reward_vyaw_av = np.append(self.reward_vyaw_av,reward_vz)
-            if actual_vx > 0.0:
-                if self.prev_actual_vx >= 0:
-                    self.prev_actual_vx +=1
+            if False:
+                if actual_vx > 0.0:
+                    if self.prev_actual_vx >= 0:
+                        self.prev_actual_vx +=1
+                    else:
+                        self.prev_actual_vx =1
+                elif actual_vx < 0.0:
+                    if self.prev_actual_vx <= 0:
+                        self.prev_actual_vx -=1
+                    else:
+                        self.prev_actual_vx = -1
                 else:
-                    self.prev_actual_vx =1
-            elif actual_vx < 0.0:
-                if self.prev_actual_vx <= 0:
-                    self.prev_actual_vx -=1
-                else:
-                    self.prev_actual_vx = -1
-            else:
-                self.prev_actual_vx = 0
+                    self.prev_actual_vx = 0
 
         if False:
             print(F'reward_pos:{reward_pos:.3f}')   # こいつが増えていくか?

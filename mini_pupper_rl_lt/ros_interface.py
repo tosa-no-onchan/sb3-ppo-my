@@ -393,9 +393,8 @@ class MiniPupperROSInterface(Node):
             clipped_angular_z / MAX_ANG_Z
         ])
 
-    def update_step_observations(self):
-        """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
-        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
+    def wait_current_velocity(self):
+        rc=True
         # 💡 前回のステップから今回のステップの間に、データが1件以上届いていれば平均を取る
         if len(self.step_vx_list) > 0:
             #print(F'self.step_vx_list:{len(self.step_vx_list)}')
@@ -411,10 +410,18 @@ class MiniPupperROSInterface(Node):
             self.step_vyaw_list.clear()
         else:
             # 万が一データが届いていなければ、前回の値をキープ（または0）
-            self.current_vx = 0.0
-            self.current_vy = 0.0
-            self.current_vyaw = 0.0
-            #pass
+            #self.current_vx = 0.0
+            #self.current_vy = 0.0
+            #self.current_vyaw = 0.0
+            # 結構、受け取れない見たい。
+            #print(F'step_vxlist leng:0')
+            rc=False
+            pass
+        return rc
+
+    def update_step_observations(self):
+        """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
+        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
 
         # 1. 関節速度の一括平均
         if len(self.step_joint_vel_list) > 0:
@@ -442,6 +449,14 @@ class MiniPupperROSInterface(Node):
             self.step_roll_vel_list.clear()
             self.step_pitch_vel_list.clear()
             self.step_yaw_vel_list.clear()
+
+        for _ in range(20):
+            rc=self.wait_current_velocity()
+            if rc==True:
+                break
+            rclpy.spin_once(self, timeout_sec=0.001)
+        if rc==False:
+            print(F'step_vxlist leng:0')
 
     # ------------------------
     # observation
