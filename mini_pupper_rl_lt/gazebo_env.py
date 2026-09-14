@@ -92,7 +92,6 @@ class MiniPupperEnv(gym.Env):
         self.episode_steps = 0
         self.test_id=0
 
-        self.prev_action_norm = None
         self.move_penalty=0.0
         self.move_penalty_cur=0.0
 
@@ -155,7 +154,6 @@ class MiniPupperEnv(gym.Env):
         self.episode_steps = 0
         self.next_bounus_steps = self._max_episode_steps
 
-        self.prev_action_norm = None
         self.move_penalty=0.0
         self.move_penalty_cur=0.0
 
@@ -359,11 +357,14 @@ class MiniPupperEnv(gym.Env):
         elif self.test_id==14:
             vx=0.0
             vy=0.0
-            v_yaw= MAX_ANG_Z
+            # -0.3 から 0.3
+            v_yaw= np.random.randint(-30, 31) * 0.01
         elif self.test_id==15:
-            vx=0.0
+            # 最小: -15 * 0.01 = -0.15
+            # 最大:  15 * 0.01 = +0.15  (16は含まれないため最大15)
+            vx = np.random.randint(-15, 16) * 0.01
             vy=0.0
-            v_yaw= MAX_ANG_Z * -0.2
+            v_yaw=0.0
         else:
             # x（前後）: -0.25 〜 0.5 (0.05刻み -> 16パターン)
             cmd_x = np.random.randint(-5, 11) * 0.05 * 0.2
@@ -382,7 +383,6 @@ class MiniPupperEnv(gym.Env):
         #if self.test_id > 18:
         if self.test_id > 36:
             self.test_id=0
-
 
     def make_test_cmd2(self):
         #MAX_LIN_X = 0.26  # m/s
@@ -521,8 +521,6 @@ class MiniPupperEnv(gym.Env):
         action_norm = action * MAX_JOINT_RAD * MAX_ACTION_RAD + stand_pose
 
         # 下記は、 mini pupper の joint 角を使う場合
-        action_norm_chek = action * MAX_JOINT_RAD * MAX_ACTION_RAD
-
         # 動きを、 -90度 から +90度 に制限する
         action_norm = np.clip(action_norm, -MAX_JOINT_RAD, MAX_JOINT_RAD)
 
@@ -533,54 +531,6 @@ class MiniPupperEnv(gym.Env):
         action_norm[[0, 3, 6, 9]] = np.clip(action_norm[[0, 3, 6, 9]], -MAX_JOINT_RAD20, MAX_JOINT_RAD20)
 
         # 初期化：1ステップ目のために予めエラーが出ないよう 0 で初期化しておく
-        velocity_penalty = 0.0
-        if False:
-            action_norm_chek[[0, 3, 6, 9]] = action[[0, 3, 6, 9]] * MAX_JOINT_RAD20 * MAX_ACTION_RAD
-
-            if self.prev_action_norm is not None:
-                # --- 【追加】回転角速度ペナルティの計算 ---
-                # 1ステップあたりの経過時間(秒)。WAITE_STEP=2 で Gazeboが20ms周期なら 0.02秒
-                dt = 0.02 
-                
-                # 前回の目標角度との差分[rad]から、擬似的な「回転角速度[rad/s]」を計算
-                joint_velocities = (action_norm_chek - self.prev_action_norm) / dt
-
-                # 1. 各関節の「絶対角速度」を計算
-                abs_velocities = np.abs(joint_velocities)
-                abs_velocities_max = np.max(abs_velocities)
-
-                #print(F"abs_velocities_max:{abs_velocities_max}")
-
-                # 2. 許容する基準値（しきい値）を設定
-                # 基準値をモデルの生の激しさに合わせて引き上げる
-                # 2. 許容する基準値（実機の物理限界 220rpm ≒ 23 rad/s）
-                threshold_vel = 20.0
-                #threshold_vel = 18.0
-                #threshold_vel = 15.0
-                #threshold_vel = 10.0
-                #threshold_vel = 9.0
-
-                # 3. 基準を超えた超過分だけを抽出（マイナスは0にする）
-                excess_velocities = np.maximum(0.0, abs_velocities_max - threshold_vel)
-
-                # 4. 超過分を2乗して平均を取り、ペナルティにする
-                # 角速度の二乗和（または絶対値の和）を計算
-                # 各関節の角速度が大きいほど、ペナルティが跳ね上がります
-
-                w_vel = 0.001  # 減点の重み係数（足の動きを見ながら調整）
-                #w_vel = 0.0001  # 減点の重み係数（足の動きを見ながら調整）
-                #w_vel = 0.0005  # 減点の重み係数（足の動きを見ながら調整）
-
-                #velocity_penalty = w_vel * np.max(np.square(excess_velocities))
-                velocity_penalty = w_vel * np.square(excess_velocities) # 配列ではないので np.max や np.sum は不要
-                # ちょっと、少なめに add by nishi 2026.8.29
-                velocity_penalty *= 0.1
-
-                #if velocity_penalty > 0.0:
-                #    print(F"velocity_penalty:{velocity_penalty:.3f} ,abs_velocities_max:{abs_velocities_max:.3f}")
-
-            # 次のステップのために現在の目標角度を保存
-            self.prev_action_norm = action_norm_chek.copy()
 
         self.ros.send_action(action_norm)
         #
@@ -602,11 +552,9 @@ class MiniPupperEnv(gym.Env):
         terminated, reward = self.check_fall(obs)   # # コケたり脱線したら即終了
         if terminated:
             # 1. コケたら即座に大減点（お説教）して終了
-            #reward -= velocity_penalty
             pass
         else:
             # Reward
-            #reward = self.compute_reward(obs,action) - velocity_penalty
             reward = self.compute_reward(obs,action)
 
         #truncated = False
@@ -660,7 +608,7 @@ class MiniPupperEnv(gym.Env):
             self.next_bounus_steps = self.next_bounus_steps + self._max_episode_steps
 
             if self.beginner==True and self.use_2_reward == False:
-                print(f"🎉 {self._max_episode_steps}ステップ完走！ 完走判定:{bonus:.2f} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} velocity_penalty:{-velocity_penalty:.3f}")
+                print(f"🎉 {self._max_episode_steps}ステップ完走！ 完走判定:{bonus:.2f} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f}")
             else:
                 if self.reward_av.size > 0:
                     sum_reward = np.sum(self.reward_av)
@@ -673,11 +621,6 @@ class MiniPupperEnv(gym.Env):
                     max_reward = 0.0
                     min_reward = 0.0
 
-                #positive_a = self.reward_vx_av[self.reward_vx_av > 0]
-                #if positive_a.size > 0:
-                #    mean_vx = np.mean(positive_a)
-                #else:
-                #    mean_vx =0.0
                 if self.reward_vx_av.size > 0:
                     mean_vx = self.reward_vx_av.mean()
                     max_vx = self.reward_vx_av.max()
@@ -712,7 +655,7 @@ class MiniPupperEnv(gym.Env):
             self.reward_yaw_av /= self.episode_steps
 
             if self.beginner==True and self.use_2_reward == False:
-                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} velocity_penalty:{-velocity_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
             else:
                 if self.reward_av.size > 0:
                     sum_reward = np.sum(self.reward_av)
@@ -831,7 +774,7 @@ class MiniPupperEnv(gym.Env):
             # 2. 各軸の許容度（ウエイト）を調整
             # ここで vx を一番厳しくし、vy や vz は少しだけマージンを持たせることも可能です
             error_vx *= 1.0  
-            error_vy *= 2.0     # vy のエラーを大きくして、全体に占める、比重を少なめにする。
+            error_vy *= 15.0     # vy のエラーを大きくして、全体に占める、比重を少なめにする。
             error_vz *= 1.0 
 
             # 指数関数の「一括マイナス」方式（Isaac Gym / rsl_rl 標準）
@@ -870,8 +813,8 @@ class MiniPupperEnv(gym.Env):
                 # -------------------------------------------------------------
                 #base_reward_vy = np.exp(-error_vy / 0.4)   # 横移動は甘口(1.0)
                 #base_reward_vy = np.exp(-error_vy / 0.25)  # 0.0 〜 1.0
-                base_reward_vy = np.exp(-error_vy / 0.15)  # 0.0 〜 1.0
-                #base_reward_vy = np.exp(-error_vy / 0.05)   # 
+                #base_reward_vy = np.exp(-error_vy / 0.15)  # 0.0 〜 1.0
+                base_reward_vy = np.exp(-error_vy / 0.05)   # 
                 weight_vy=1.0   # 指定がないときは、下げる 
                 if np.abs(self.cmd_vel[1]) > 0.0:
                     weight_vy = np.abs(self.cmd_vel[1]) / MAX_LIN_Y
