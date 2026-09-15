@@ -875,24 +875,18 @@ class MiniPupperEnv(gym.Env):
                     if reward_vz > 0:
                         reward_vz = reward_vz * ratio
                     total_vel_reward = total_vel_reward * ratio
-
             else:
-                if self.cmd_vel[0] == 0.0 and self.cmd_vel[1] == 0.0 and self.cmd_vel[2] == 0.0:
-                    # 綺麗にピタッと止まっていれば最大 0.2 点をあげる（値は調整可能です）
-                    stop_error = (actual_vx**2) + (actual_vy**2) + (actual_vyaw**2)
-                    total_vel_reward = 0.2 * np.exp(-stop_error / 0.1)
-                else:
-                    # 最初の、0.5[秒] は、報酬をスロースタートする
-                    if self.episode_steps <= 25:
-                        ratio = float(self.episode_steps) / 25.0
-                        if reward_vx > 0:
-                            reward_vx = reward_vx * ratio
-                        if reward_vy > 0:
-                            reward_vy = reward_vy * ratio
-                        if reward_vz > 0:
-                            reward_vz = reward_vz * ratio
-                    # 動いている時は、3軸の合計点
-                    total_vel_reward = reward_vx + reward_vy + reward_vz
+                # 最初の、0.5[秒] は、報酬をスロースタートする
+                if self.episode_steps <= 25:
+                    ratio = float(self.episode_steps) / 25.0
+                    if reward_vx > 0:
+                        reward_vx = reward_vx * ratio
+                    if reward_vy > 0:
+                        reward_vy = reward_vy * ratio
+                    if reward_vz > 0:
+                        reward_vz = reward_vz * ratio
+                # 動いている時は、3軸の合計点
+                total_vel_reward = reward_vx + reward_vy + reward_vz
 
             self.reward_vx_av = np.append(self.reward_vx_av,reward_vx)
             self.reward_vy_av = np.append(self.reward_vy_av,reward_vy)
