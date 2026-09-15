@@ -803,12 +803,12 @@ class MiniPupperEnv(gym.Env):
             # 指数関数の「一括マイナス」方式（Isaac Gym / rsl_rl 標準）
             if self.use_rsl_rl_norm:
                 # もし目標と実際の進行方向が「逆」なら、ペナルティとしてその軸の誤差を膨らませる
-                if self.cmd_vel[0] * actual_vx < 0.0:
+                if (abs(self.cmd_vel[0]) >= 0.01) and (self.cmd_vel[0] * actual_vx < 0.0):
                     error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
-                if self.cmd_vel[1] * actual_vy < 0.0:
+                if (abs(self.cmd_vel[1]) >= 0.01) and (self.cmd_vel[1] * actual_vy < 0.0):
                     error_vy *= 2.0
-                if self.cmd_vel[2] * actual_vyaw < 0.0:
-                    error_vy *= 2.0
+                if (abs(self.cmd_vel[2]) >= 0.01) and (self.cmd_vel[2] * actual_vyaw < 0.0):
+                    error_vz *= 2.0
 
                 # 2. 各軸の許容度（ウエイト）を調整
                 # ここで vx を一番厳しくし、vy や vz は少しだけマージンを持たせることも可能です
@@ -831,11 +831,11 @@ class MiniPupperEnv(gym.Env):
 
             else:
                 # もし目標と実際の進行方向が「逆」なら、ペナルティとしてその軸の誤差を膨らませる
-                if self.cmd_vel[0] * actual_vx < 0.0:
+                if (abs(self.cmd_vel[0]) >= 0.01) and (self.cmd_vel[0] * actual_vx < 0.0):
                     error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
-                if self.cmd_vel[1] * actual_vy < 0.0:
+                if (abs(self.cmd_vel[1]) >= 0.01) and (self.cmd_vel[1] * actual_vy < 0.0):
                     error_vy *= 2.0
-                if self.cmd_vel[2] * actual_vyaw < 0.0:
+                if (abs(self.cmd_vel[2]) >= 0.01) and (self.cmd_vel[2] * actual_vyaw < 0.0):
                     error_vz *= 2.0
 
                 # -------------------------------------------------------------
