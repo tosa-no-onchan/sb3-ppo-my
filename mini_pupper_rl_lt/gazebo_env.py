@@ -284,7 +284,7 @@ class MiniPupperEnv(gym.Env):
         # 3. [6, 31] の形状の NumPy 配列に変換して返す
         return np.array(self.obs_history, dtype=np.float32),{}
 
-    def make_test_cmd(self):
+    def make_test_cmd_beginner(self):
         #MAX_LIN_X = 0.26  # m/s
         #MAX_LIN_Y = 0.13  # m/s
         #MAX_ANG_Z = 1.82  # rad/s
@@ -384,13 +384,13 @@ class MiniPupperEnv(gym.Env):
         if self.test_id > 36:
             self.test_id=0
 
-    def make_test_cmd2(self):
+    def make_test_cmd(self):
         #MAX_LIN_X = 0.26  # m/s
         #MAX_LIN_Y = 0.13  # m/s
         #MAX_ANG_Z = 1.82  # rad/s
 
         # ちょっと、直進だけで、テスト
-        self.test_id=10
+        #self.test_id=10
         #self.test_id=9
 
         # MAX_LIN_X = 0.26  # m/s
@@ -441,7 +441,6 @@ class MiniPupperEnv(gym.Env):
             vx= MAX_LIN_X
             vy=0.0
             v_yaw=0.0
-
         elif self.test_id==11:
             vx=0.0
             vy=0.0
@@ -466,6 +465,17 @@ class MiniPupperEnv(gym.Env):
             vx=0.0
             vy=0.0
             v_yaw= MAX_ANG_Z * -1.0
+        elif self.test_id==17:
+            vx=0.0
+            vy=0.0
+            # -1.0 から 1.0
+            v_yaw= np.random.randint(-10, 11) * 0.1
+        elif self.test_id==18:
+            # 最小: -15 * 0.01 = -0.25
+            # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50)
+            vx = np.random.randint(-25, 51) * 0.01
+            vy=0.0
+            v_yaw=0.0
         else:
             if False:
                 # -2.5 から 5 までの整数をランダムに生成し、10.0 で割る
@@ -716,40 +726,67 @@ class MiniPupperEnv(gym.Env):
             {}
         )
 
-    def speed_reward_comp(self,error_v,speed,max_speed):
-        # -------------------------------------------------------------
-        # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
-        # -------------------------------------------------------------
-        #speed=0.1    sigma:0.002
-        #speed=0.2    sigma:0.007
-        #speed=0.25   sigma:0.015
-        #speed=0.3    sigma:0.018
-        #speed=0.4    sigma:0.027
-        #speed=0.5    sigma:0.04
-        #speed=0.6    sigma:0.07
-        #speed=0.7    sigma:0.09
-        #speed=0.8    sigma:0.12
-        #speed=0.9    sigma:0.15
-        #speed=1.0    sigma:0.17
+    def speed_reward_comp(self, actual_v, cmd_v, max_speed):
+        """
+        actual_v: 実際の速度 (float)
+        cmd_v: 目標速度 (float)
+        max_speed: その軸の最大速度 (float)
+        """
+        error_v = (cmd_v - actual_v) ** 2
+        speed = np.abs(cmd_v)
 
-        if speed < 0.01:  # 実質 0.0 とみなす（浮動小数点の誤差対策）
+        # -------------------------------------------------------------
+        # 鉄則：目標と現実の進行方向が「逆」なら、その時点で報酬は完全0
+        # -------------------------------------------------------------
+        # (例: 目標が前進(プラス)なのに現実が後退(マイナス)なら、掛け算するとマイナスになる)
+        #if cmd_v * actual_v < 0.0:
+        if (cmd_v > 0.0 and actual_v < 0.0) or (cmd_v < 0.0 and actual_v > 0.0):
+            return 0.0, 0.0
+
+        if speed < 0.01:  # 実質 0.0 とみなす（停止指令時）
             # -------------------------------------------------------------
             # 【停止処理】動いていたら減点（ペナルティ）
             # -------------------------------------------------------------
             # 速度が完全に 0.0 であれば 1.0点。動いているほど 0.0点 に近づく
             # シグマは 0.04〜0.05 程度の「現実的な厳しさ」に固定する
-            base_reward_v = np.exp(-error_v / 0.04)
+            #base_reward_v = np.exp(-error_v / 0.04)
+            #base_reward_v = np.exp(-error_v / 0.02)
+            # 停止時は、厳しめのシグマ 0.007 で微小なブレも許さない
+            base_reward_v = np.exp(-error_v / 0.007)
+            
+            # もし 10^-4 (0.0001) 以下のゴミのような微小値なら、完全に0に丸める（ピクつき防止）
+            if base_reward_v < 1e-4:
+                base_reward_v = 0.0
+
             # 必要に応じて、関節がガタガタ動くのを防ぐペナルティを足す（オプション）
             # base_reward_v -= 0.1 * (現在の関節速度の二乗和)
-            weight_v=0.2   # 0.2 は、重み付け speed=0.0 の時の適正値は、自分で確認要!!
+            #weight_v=0.2   # 0.2 は、重み付け speed=0.0 の時の適正値は、自分で確認要!!
+            weight_v = 0.1  # 停止時の重み付け
         else:
-            # スピードに応じて適切なシグマを自動決定（選択肢Aを採用）
+            # -------------------------------------------------------------
+            # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
+            # -------------------------------------------------------------
+            #speed=0.1    sigma:0.002
+            #speed=0.2    sigma:0.007
+            #speed=0.25   sigma:0.015
+            #speed=0.3    sigma:0.018
+            #speed=0.4    sigma:0.027
+            #speed=0.5    sigma:0.04
+            #speed=0.6    sigma:0.07
+            #speed=0.7    sigma:0.09
+            #speed=0.8    sigma:0.12
+            #speed=0.9    sigma:0.15
+            #speed=1.0    sigma:0.17
+            # スピードに応じた動的シグマ
             sigma_v = max(0.002, 0.17 * (speed ** 2))
-            #base_reward_v = np.exp(-error_v / 0.05)  # 0.05 ナロー
-            #base_reward_v = np.exp(-error_v / 0.25)  # 0.25 ワイド
-            base_reward_v = np.exp(-error_v / sigma_v)  # 0.05 ナロー
-            #weight_v = speed/max_speed  # speed に応じた、重み
-            weight_v = 1.0  # speed に応じた、重み
+            base_reward_v = np.exp(-error_v / sigma_v)
+            
+            # ここでも微小な報酬の残りカスをカット
+            if base_reward_v < 1e-4:
+                base_reward_v = 0.0
+                
+            weight_v = speed / max_speed  # スピードに応じたリニア配点
+            #weight_v = 1.0  # speed に応じた、重み
 
         return base_reward_v, weight_v
 
@@ -830,33 +867,25 @@ class MiniPupperEnv(gym.Env):
                 total_vel_reward = np.exp(-weighted_error / sigma*3.0)
 
             else:
-                # もし目標と実際の進行方向が「逆」なら、ペナルティとしてその軸の誤差を膨らませる
-                if (abs(self.cmd_vel[0]) >= 0.01) and(abs(actual_vx) >= 0.01) and (self.cmd_vel[0] * actual_vx < 0.0):
-                    error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
-                if (abs(self.cmd_vel[1]) >= 0.01) and(abs(actual_vy) >= 0.01) and (self.cmd_vel[1] * actual_vy < 0.0):
-                    error_vy *= 2.0
-                if (abs(self.cmd_vel[2]) >= 0.01) and(abs(actual_vyaw) >= 0.01) and (self.cmd_vel[2] * actual_vyaw < 0.0):
-                    error_vz *= 2.0
-
                 # -------------------------------------------------------------
                 # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                speed_x = np.abs(self.cmd_vel[0])
-                base_reward_vx,weight_vx = self.speed_reward_comp(error_vx, speed_x, MAX_LIN_X)
+                cmd_vx=self.cmd_vel[0]
+                base_reward_vx,weight_vx = self.speed_reward_comp(actual_vx, cmd_vx, MAX_LIN_X)
                 reward_vx = base_reward_vx * weight_vx
 
                 # -------------------------------------------------------------
                 # 2. 横移動速度 (vy) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                speed_y = np.abs(self.cmd_vel[1])
-                base_reward_vy,weight_vy = self.speed_reward_comp(error_vy, speed_y, MAX_LIN_Y)
+                cmd_vy=self.cmd_vel[1]
+                base_reward_vy,weight_vy = self.speed_reward_comp(actual_vy, cmd_vy, MAX_LIN_Y)
                 reward_vy = base_reward_vy * weight_vy * 0.5    # 0.5 は、重み付け
 
                 # -------------------------------------------------------------
                 # 3. 旋回速度 (vz / vyaw) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                speed_z = np.abs(self.cmd_vel[2])
-                base_reward_vz,weight_vz = self.speed_reward_comp(error_vz, speed_z, MAX_ANG_Z)
+                cmd_vyaw=self.cmd_vel[2]
+                base_reward_vz,weight_vz = self.speed_reward_comp(actual_vyaw,cmd_vyaw, MAX_ANG_Z)
                 reward_vz = base_reward_vz * weight_vz * 0.5    # 0.5 は、重み付け
 
             # -------------------------------------------------------------
