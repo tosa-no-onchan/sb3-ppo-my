@@ -136,11 +136,9 @@ class MiniPupperEnv(gym.Env):
         self.reward_yaw_c = -4.0
 
         if self.stage==3:
-            self.fall_penalty = -180
-            #self.reward_pos_c = -4.0    # 距離の違いを重視する。
-            #self.reward_yaw_c = -1.0   # 向きのズレはラジアンなので中くらいに（45度〜90度で厳しく）
+            self.fall_penalty = -120    # 2.0 * 300 * 0.2 = 120
             if self.use_rsl_rl_norm:
-                self.fall_penalty = -60
+                self.fall_penalty = -60 # 1.0 * 300 * 0.2 = 60
 
         self.threshold_z_low = self.min_height - self.z_sigma   # 下側の境界線 (0.10m)
         self.threshold_z_high = self.min_height + self.z_sigma_high  # 上側の境界線 (0.14m)
@@ -745,7 +743,8 @@ class MiniPupperEnv(gym.Env):
             # 例：最大速度の半分(0.25)で逆走したら 0.25/0.5 * -1.0 = -0.5 点
             # 下記は、要調整。 train 初期は、 -0.1 辺りがよいかも!!
             #penalty = -1.0
-            penalty = -0.8
+            #penalty = -0.8
+            penalty = -0.5
             weight_v = speed / max_speed  # スピードに応じたリニア配点
 
             return penalty, weight_v
@@ -840,19 +839,23 @@ class MiniPupperEnv(gym.Env):
             actual_vy =  self.ros.get_side_velocity()
             actual_vyaw =  self.ros.get_yaw_velocity()
 
+            cmd_vx=self.cmd_vel[0]
+            cmd_vy=self.cmd_vel[1]
+            cmd_vyaw=self.cmd_vel[2]
+
             #print(F'avarge_vx:{avarge_vx:.3f}')
-            error_vx = (self.cmd_vel[0] - actual_vx) ** 2
-            error_vy = (self.cmd_vel[1] - actual_vy) ** 2
-            error_vz = (self.cmd_vel[2] - actual_vyaw) ** 2  # 回転速度
+            error_vx = (cmd_vx - actual_vx) ** 2
+            error_vy = (cmd_vy - actual_vy) ** 2
+            error_vz = (cmd_vyaw - actual_vyaw) ** 2  # 回転速度
 
             # 指数関数の「一括マイナス」方式（Isaac Gym / rsl_rl 標準）
             if self.use_rsl_rl_norm:
                 # もし目標と実際の進行方向が「逆」なら、ペナルティとしてその軸の誤差を膨らませる
-                if (abs(self.cmd_vel[0]) >= 0.01) and (self.cmd_vel[0] * actual_vx < 0.0):
+                if (abs(cmd_vx) >= 0.01) and (cmd_vx * actual_vx < 0.0):
                     error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
-                if (abs(self.cmd_vel[1]) >= 0.01) and (self.cmd_vel[1] * actual_vy < 0.0):
+                if (abs(cmd_vy) >= 0.01) and (cmd_vy * actual_vy < 0.0):
                     error_vy *= 2.0
-                if (abs(self.cmd_vel[2]) >= 0.01) and (self.cmd_vel[2] * actual_vyaw < 0.0):
+                if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * actual_vyaw < 0.0):
                     error_vz *= 2.0
 
                 # 2. 各軸の許容度（ウエイト）を調整
@@ -878,21 +881,18 @@ class MiniPupperEnv(gym.Env):
                 # -------------------------------------------------------------
                 # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                cmd_vx=self.cmd_vel[0]
                 base_reward_vx,weight_vx = self.speed_reward_comp(actual_vx, cmd_vx, MAX_LIN_X)
                 reward_vx = base_reward_vx * weight_vx
 
                 # -------------------------------------------------------------
                 # 2. 横移動速度 (vy) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                cmd_vy=self.cmd_vel[1]
                 base_reward_vy,weight_vy = self.speed_reward_comp(actual_vy, cmd_vy, MAX_LIN_Y)
                 reward_vy = base_reward_vy * weight_vy * 0.5    # 0.5 は、重み付け
 
                 # -------------------------------------------------------------
                 # 3. 旋回速度 (vz / vyaw) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                cmd_vyaw=self.cmd_vel[2]
                 base_reward_vz,weight_vz = self.speed_reward_comp(actual_vyaw,cmd_vyaw, MAX_ANG_Z)
                 reward_vz = base_reward_vz * weight_vz * 0.5    # 0.5 は、重み付け
 
