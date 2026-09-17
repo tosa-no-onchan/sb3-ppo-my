@@ -753,9 +753,9 @@ class MiniPupperEnv(gym.Env):
 
                 # シグマ値：どのくらいの逆走速度でペナルティを最大（-1.0近く）にするか
                 # 例: 0.15 m/s 以上の逆走を「一発アウト」にしたい場合は 0.01 程度に設定
-                #sigma_back = 0.01
+                sigma_back = 0.01
                 #speed=0.25   sigma:0.015
-                sigma_back = 0.015
+                #sigma_back = 0.015
                 
                 # 累進的ペナルティの計算
                 # reverse_speedが0ならpenaltyは0.0。大きくなるほど -1.0 に近づく
