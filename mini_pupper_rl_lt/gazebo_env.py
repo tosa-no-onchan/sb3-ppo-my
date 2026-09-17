@@ -739,12 +739,28 @@ class MiniPupperEnv(gym.Env):
         # (例: 目標が前進(プラス)なのに現実が後退(マイナス)なら、掛け算するとマイナスになる)
         #if cmd_v * actual_v < 0.0:
         if (cmd_v > 0.0 and actual_v < 0.0) or (cmd_v < 0.0 and actual_v > 0.0):
-            # 逆走ペナルティの計算（実際の逆走速度の絶対値を使用）
-            # 例：最大速度の半分(0.25)で逆走したら 0.25/0.5 * -1.0 = -0.5 点
-            # 下記は、要調整。 train 初期は、 -0.1 辺りがよいかも!!
-            #penalty = -1.0
-            #penalty = -0.8
-            penalty = -0.5
+            if False:
+                # 逆走ペナルティの計算（実際の逆走速度の絶対値を使用）
+                # 例：最大速度の半分(0.25)で逆走したら 0.25/0.5 * -1.0 = -0.5 点
+                # 下記は、要調整。 train 初期は、 -0.1 辺りがよいかも!!
+                #penalty = -1.0
+                #penalty = -0.8
+                penalty = -0.5
+
+            else:
+                # 逆走している「実際の速度の絶対値」をベースにする
+                reverse_speed = np.abs(actual_v)
+
+                # シグマ値：どのくらいの逆走速度でペナルティを最大（-1.0近く）にするか
+                # 例: 0.15 m/s 以上の逆走を「一発アウト」にしたい場合は 0.01 程度に設定
+                #sigma_back = 0.01
+                #speed=0.25   sigma:0.015
+                sigma_back = 0.015
+                
+                # 累進的ペナルティの計算
+                # reverse_speedが0ならpenaltyは0.0。大きくなるほど -1.0 に近づく
+                penalty = -1.0 * (1.0 - np.exp(-(reverse_speed ** 2) / sigma_back))
+
             weight_v = speed / max_speed  # スピードに応じたリニア配点
 
             return penalty, weight_v
