@@ -892,20 +892,20 @@ class MiniPupperEnv(gym.Env):
 
                 # 3. Mini Pupperの速度スケールに合わせたナローなシグマ（0.04 〜 0.05 * 3）
                 total_vel_reward = np.exp(-weighted_error / sigma*3.0)
-
+                # もし 10^-4 (0.0001) 以下のゴミのような微小値なら、完全に0に丸める（ピクつき防止）
+                if total_vel_reward < 1e-4:
+                    total_vel_reward = 0.0
             else:
                 # -------------------------------------------------------------
                 # 1. 前進速度 (vx) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
                 base_reward_vx,weight_vx = self.speed_reward_comp(actual_vx, cmd_vx, MAX_LIN_X)
                 reward_vx = base_reward_vx * weight_vx
-
                 # -------------------------------------------------------------
                 # 2. 横移動速度 (vy) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
                 base_reward_vy,weight_vy = self.speed_reward_comp(actual_vy, cmd_vy, MAX_LIN_Y)
                 reward_vy = base_reward_vy * weight_vy * 0.5    # 0.5 は、重み付け
-
                 # -------------------------------------------------------------
                 # 3. 旋回速度 (vz / vyaw) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
@@ -932,12 +932,18 @@ class MiniPupperEnv(gym.Env):
                 # 最初の、0.5[秒] は、報酬をスロースタートする
                 if self.episode_steps <= 25:
                     ratio = float(self.episode_steps) / 25.0
-                    if reward_vx > 0:
+                    if False:
+                        if reward_vx > 0:
+                            reward_vx = reward_vx * ratio
+                        if reward_vy > 0:
+                            reward_vy = reward_vy * ratio
+                        if reward_vz > 0:
+                            reward_vz = reward_vz * ratio
+                    else:
                         reward_vx = reward_vx * ratio
-                    if reward_vy > 0:
                         reward_vy = reward_vy * ratio
-                    if reward_vz > 0:
                         reward_vz = reward_vz * ratio
+
                 # 動いている時は、3軸の合計点
                 total_vel_reward = reward_vx + reward_vy + reward_vz
 
