@@ -268,7 +268,7 @@ class MiniPupperEnv(gym.Env):
         self.ros.publish_cmd_vel(self.cmd_vel)
         rclpy.spin_once(self.ros, timeout_sec=0.01)
 
-        print(F"cmd: {self.cmd_vel[0]:.2f}, {self.cmd_vel[1]:.2f}, {self.cmd_vel[2]:.2f}")
+        print(F"cmd: {self.cmd_vel[0]:.2f}, {self.cmd_vel[1]:.2f}, {math.degrees(self.cmd_vel[2]):.1f}[度]")
 
         #obs = self.ros.get_observation()
 
