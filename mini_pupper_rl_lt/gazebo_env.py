@@ -268,6 +268,8 @@ class MiniPupperEnv(gym.Env):
         self.ros.publish_cmd_vel(self.cmd_vel)
         rclpy.spin_once(self.ros, timeout_sec=0.01)
 
+        print(F"cmd: {self.cmd_vel[0]:.2f}, {self.cmd_vel[1]:.2f}, {self.cmd_vel[2]:.2f}")
+
         #obs = self.ros.get_observation()
 
         # 1. 既存の関数で『今この瞬間』の生データ(31次元)を取得
@@ -656,14 +658,14 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f"🎉 {self._max_episode_steps}ステップ完走！ 完走判定:{bonus:.2f} reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度)")
-                print(f"🎉 {self.episode_steps}ステップ完走！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f"🎉 {self.episode_steps}ステップ完走！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f}")
 
         elif terminated:
             self.reward_pos_av /= self.episode_steps
             self.reward_yaw_av /= self.episode_steps
 
             if self.beginner==True and self.use_2_reward == False:
-                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f}")
             else:
                 if self.reward_av.size > 0:
                     sum_reward = np.sum(self.reward_av)
@@ -708,7 +710,7 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f" 中断 {self.episode_steps}ステップ！ reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度) max_vx:{max_vx:.2f} vy:{max_vy:.2f} vyaw:{max_vyaw:.2f}")
-                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f}")
 
         #print(F"steps:{self.episode_steps} reward:{reward:.2f}")
 
