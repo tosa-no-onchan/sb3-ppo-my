@@ -295,85 +295,52 @@ class MiniPupperEnv(gym.Env):
 
         # MAX_LIN_X = 0.26  # m/s
         # 注) 1steps 20[ms] で、500steps で、 Max 0.38[M] なので、 0.2 [M] ずれたら、おしおきか!!
+        vx = 0.0
+        vy=0.0
+        v_yaw=0.0
 
         if self.test_id==0:
             vx = MAX_LIN_X * 0.3
-            vy=0.0
-            v_yaw=0.0
         elif self.test_id==1:
             vx= MAX_LIN_X * -0.3
-            vy=0.0
-            v_yaw=0.0
         elif self.test_id==2:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * 0.15
         elif self.test_id==3:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * -1.0 * 0.15
         elif self.test_id==4:
-            vx=0.0
-            vy=0.0
-            v_yaw=0.0
-        #
+            pass
         elif self.test_id==5:
             vx= MAX_LIN_X * 0.1
-            vy=0.0
-            v_yaw=0.0
         elif self.test_id==6:
             vx= MAX_LIN_X * -0.1
-            vy=0.0
-            v_yaw=0.0
         elif self.test_id==7:
-            vx=0.0
-            vy=0.0
             v_yaw=  MAX_ANG_Z *0.1
         elif self.test_id==8:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * -0.2
         elif self.test_id==9:
             vx= MAX_LIN_X * 0.2
-            vy=0.0
-            v_yaw=0.0
-
         elif self.test_id==10:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * 0.2
         elif self.test_id==11:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * -1.0 * 0.2
         elif self.test_id==12:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * 0.3
         elif self.test_id==13:
-            vx=0.0
-            vy=0.0
             v_yaw= MAX_ANG_Z * -1.0 * 0.3
         elif self.test_id==14:
-            vx=0.0
-            vy=0.0
             # -0.3 から 0.3
             v_yaw= np.random.randint(-30, 31) * 0.01
         elif self.test_id==15:
             # 最小: -15 * 0.01 = -0.15
             # 最大:  15 * 0.01 = +0.15  (16は含まれないため最大15)
             vx = np.random.randint(-15, 16) * 0.01
-            vy=0.0
-            v_yaw=0.0
         else:
             # x（前後）: -0.25 〜 0.5 (0.05刻み -> 16パターン)
             cmd_x = np.random.randint(-5, 11) * 0.05 * 0.2
             # z（旋回 yaw角速度）: -1.0 〜 1.0 (0.1刻み -> 21パターン) 
             # ※もしzの範囲や刻みが別であれば数値を調整してください
             cmd_z = np.random.randint(-10, 11) * 0.1 * 0.1
-
             vx = cmd_x
-            vy = 0.0 # 横歩きは最初は0固定が安全です
             v_yaw = cmd_z
             
         # 内部変数に保存（Observationに反映される）
@@ -396,86 +363,97 @@ class MiniPupperEnv(gym.Env):
         # MAX_LIN_X = 0.26  # m/s
         # 注) 1steps 20[ms] で、500steps で、 Max 0.38[M] なので、 0.2 [M] ずれたら、おしおきか!!
 
+        vx=0.0
+        vy=0.0
+        v_yaw=0.0
+
         if self.test_id==0:
-            vx = MAX_LIN_X * 0.3
-            vy=0.0
-            v_yaw=0.0
+            vx = MAX_LIN_X * 0.1
         elif self.test_id==1:
-            vx= MAX_LIN_X * -0.5
-            vy=0.0
-            v_yaw=0.0
+            vx = MAX_LIN_X * 0.2
         elif self.test_id==2:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * 0.25
+            vx = MAX_LIN_X * 0.3
         elif self.test_id==3:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * -1.0 * 0.25
+            vx = MAX_LIN_X * 0.4
         elif self.test_id==4:
-            vx=0.0
-            vy=0.0
-            v_yaw=0.0
-        #
+            vx = MAX_LIN_X * 0.5
         elif self.test_id==5:
-            vx= MAX_LIN_X * 0.5
-            vy=0.0
-            v_yaw=0.0
+            vx = MAX_LIN_X * 0.6
         elif self.test_id==6:
-            vx= MAX_LIN_X * -0.25
-            vy=0.0
-            v_yaw=0.0
-        elif self.test_id==7:
-            vx=0.0
-            vy=0.0
-            v_yaw=  MAX_ANG_Z *0.5
-        elif self.test_id==8:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * -0.5
-        elif self.test_id==9:
             vx= MAX_LIN_X * 0.7
-            vy=0.0
-            v_yaw=0.0
+        elif self.test_id==7:
+            vx= MAX_LIN_X * 0.8
+        elif self.test_id==8:
+            vx= MAX_LIN_X * 0.9
+        elif self.test_id==9:
+            vx= MAX_LIN_X 
         elif self.test_id==10:
-            vx= MAX_LIN_X
-            vy=0.0
-            v_yaw=0.0
+            vx= MAX_LIN_X * -0.5 * 0.1
         elif self.test_id==11:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * 0.5
+            vx= MAX_LIN_X * -0.5 * 0.2
         elif self.test_id==12:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * -1.0 * 0.5
+            vx= MAX_LIN_X * -0.5 * 0.3
         elif self.test_id==13:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * 0.75
+            vx= MAX_LIN_X * -0.5 * 0.4
         elif self.test_id==14:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * -1.0 * 0.75
+            vx= MAX_LIN_X * -0.5 * 0.5
         elif self.test_id==15:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z
+            vx= MAX_LIN_X * -0.5 * 0.6
         elif self.test_id==16:
-            vx=0.0
-            vy=0.0
-            v_yaw= MAX_ANG_Z * -1.0
+            vx= MAX_LIN_X * -0.5 * 0.7
         elif self.test_id==17:
-            vx=0.0
-            vy=0.0
+            vx= MAX_LIN_X * -0.5 * 0.8
+        elif self.test_id==18:
+            vx= MAX_LIN_X * -0.5 * 0.9
+        elif self.test_id==19:
+            v_yaw=  MAX_ANG_Z *0.1
+        elif self.test_id==20:
+            v_yaw= MAX_ANG_Z * -0.1
+        elif self.test_id==21:
+            v_yaw=  MAX_ANG_Z *0.2
+        elif self.test_id==22:
+            v_yaw= MAX_ANG_Z * -0.2
+        elif self.test_id==23:
+            v_yaw=  MAX_ANG_Z *0.3
+        elif self.test_id==24:
+            v_yaw= MAX_ANG_Z * -0.3
+        elif self.test_id==25:
+            v_yaw=  MAX_ANG_Z *0.4
+        elif self.test_id==26:
+            v_yaw= MAX_ANG_Z * -0.4
+        elif self.test_id==27:
+            v_yaw=  MAX_ANG_Z *0.5
+        elif self.test_id==28:
+            v_yaw= MAX_ANG_Z * -0.5
+        elif self.test_id==29:
+            v_yaw= MAX_ANG_Z * 0.6
+        elif self.test_id==30:
+            v_yaw= MAX_ANG_Z * -0.6
+        elif self.test_id==31:
+            v_yaw= MAX_ANG_Z * 0.7
+        elif self.test_id==32:
+            v_yaw= MAX_ANG_Z * -0.7
+        elif self.test_id==33:
+            v_yaw= MAX_ANG_Z * 0.8
+        elif self.test_id==34:
+            v_yaw= MAX_ANG_Z * -0.8
+        elif self.test_id==35:
+            v_yaw= MAX_ANG_Z * 0.9
+        elif self.test_id==36:
+            v_yaw= MAX_ANG_Z * -0.9
+        elif self.test_id==37:
+            v_yaw= MAX_ANG_Z
+        elif self.test_id==38:
+            v_yaw= MAX_ANG_Z * -1.0
+        elif self.test_id==39:
             # -1.0 から 1.0
             v_yaw= np.random.randint(-10, 11) * 0.1
-        elif self.test_id==18:
+        elif self.test_id==40:
             # 最小: -15 * 0.01 = -0.25
             # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50) (0.01刻み -> 75パターン)
             vx = np.random.randint(-25, 51) * 0.01
-            vy=0.0
-            v_yaw=0.0
+        elif self.test_id==41:
+            pass
         else:
             if False:
                 # -2.5 から 5 までの整数をランダムに生成し、10.0 で割る
@@ -494,7 +472,6 @@ class MiniPupperEnv(gym.Env):
             cmd_z = np.random.randint(-10, 11) * 0.1 
 
             vx = cmd_x
-            vy = 0.0 # 横歩きは最初は0固定が安全です
             v_yaw = cmd_z
             
         # 内部変数に保存（Observationに反映される）
@@ -502,7 +479,7 @@ class MiniPupperEnv(gym.Env):
         self.test_id += 1
         #if self.test_id > 12:
         #if self.test_id > 18:
-        if self.test_id > 36:
+        if self.test_id > 56:
             self.test_id=0
 
     def step(self, action):
@@ -861,6 +838,8 @@ class MiniPupperEnv(gym.Env):
             actual_vyaw,imu_actual_vyaw =  self.ros.get_yaw_velocity()
             self.diff_actual_vyaw = actual_vyaw - imu_actual_vyaw
 
+            cur_actual_vyaw = imu_actual_vyaw
+
             cmd_vx=self.cmd_vel[0]
             cmd_vy=self.cmd_vel[1]
             cmd_vyaw=self.cmd_vel[2]
@@ -868,8 +847,8 @@ class MiniPupperEnv(gym.Env):
             #print(F'avarge_vx:{avarge_vx:.3f}')
             error_vx = (cmd_vx - actual_vx) ** 2
             error_vy = (cmd_vy - actual_vy) ** 2
-            error_vz = (cmd_vyaw - actual_vyaw) ** 2  # 回転速度
-            #error_vz = (cmd_vyaw - imu_actual_vyaw) ** 2  # 回転速度
+            #error_vz = (cmd_vyaw - actual_vyaw) ** 2  # 回転速度
+            error_vz = (cmd_vyaw - cur_actual_vyaw) ** 2  # 回転速度
 
             # 指数関数の「一括マイナス」方式（Isaac Gym / rsl_rl 標準）
             if self.use_rsl_rl_norm:
@@ -878,8 +857,8 @@ class MiniPupperEnv(gym.Env):
                     error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
                 if (abs(cmd_vy) >= 0.01) and (cmd_vy * actual_vy < 0.0):
                     error_vy *= 2.0
-                #if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * imu_actual_vyaw < 0.0):
-                if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * actual_vyaw < 0.0):
+                #if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * actual_vyaw < 0.0):
+                if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * cur_actual_vyaw < 0.0):
                     error_vz *= 2.0
 
                 # 2. 各軸の許容度（ウエイト）を調整
@@ -921,8 +900,8 @@ class MiniPupperEnv(gym.Env):
                 # -------------------------------------------------------------
                 # 3. 旋回速度 (vz / vyaw) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
-                base_reward_vz,weight_vz = self.speed_reward_comp(actual_vyaw,cmd_vyaw, MAX_ANG_Z)
-                #base_reward_vz,weight_vz = self.speed_reward_comp(imu_actual_vyaw,cmd_vyaw, MAX_ANG_Z)
+                #base_reward_vz,weight_vz = self.speed_reward_comp(actual_vyaw,cmd_vyaw, MAX_ANG_Z)
+                base_reward_vz,weight_vz = self.speed_reward_comp(cur_actual_vyaw,cmd_vyaw, MAX_ANG_Z)
                 reward_vz = base_reward_vz * weight_vz * 0.5    # 0.5 は、重み付け
 
             # -------------------------------------------------------------
