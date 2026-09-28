@@ -472,7 +472,7 @@ class MiniPupperEnv(gym.Env):
             v_yaw= np.random.randint(-10, 11) * 0.1
         elif self.test_id==18:
             # 最小: -15 * 0.01 = -0.25
-            # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50)
+            # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50) (0.01刻み -> 75パターン)
             vx = np.random.randint(-25, 51) * 0.01
             vy=0.0
             v_yaw=0.0
@@ -658,14 +658,14 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f"🎉 {self._max_episode_steps}ステップ完走！ 完走判定:{bonus:.2f} reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度)")
-                print(f"🎉 {self.episode_steps}ステップ完走！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f"🎉 {self.episode_steps}ステップ完走！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f} {self.diff_actual_vyaw:.2f})")
 
         elif terminated:
             self.reward_pos_av /= self.episode_steps
             self.reward_yaw_av /= self.episode_steps
 
             if self.beginner==True and self.use_2_reward == False:
-                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{reward:.2f} tilt_penalty:{self.tilt_penalty:.2f} height_penalty:{self.height_penalty:.3f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f}) {self.diff_actual_vyaw:.2f}")
             else:
                 if self.reward_av.size > 0:
                     sum_reward = np.sum(self.reward_av)
@@ -710,7 +710,7 @@ class MiniPupperEnv(gym.Env):
                     max_vyaw = 0.0
                     min_vyaw = 0.0
                 #print(f" 中断 {self.episode_steps}ステップ！ reward:{reward:.2f} reward_pos_av:{self.reward_pos_av:.3f} reward_yaw_av:{self.reward_yaw_av:.3f} virt:({virt_x:.2f}, {virt_y:.2f}, {virt_yaw_dgree:.2f} 度) max_vx:{max_vx:.2f} vy:{max_vy:.2f} vyaw:{max_vyaw:.2f}")
-                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f})")
+                print(f" 中断 {self.episode_steps}ステップ！ {self.episode} reward:{sum_reward:.2f} {mean_reward:.2f} {max_reward:.2f} {min_reward:.2f} vx:{mean_vx:.2f} {max_vx:.2f} {min_vx:.2f} vy:{mean_vy:.2f} {max_vy:.2f} {min_vy:.2f} vyaw:{mean_vyaw:.2f} {max_vyaw:.2f} {min_vyaw:.2f} (pos:{virt_x:.1f} {virt_y:.1f} {virt_yaw:.1f} {self.diff_actual_vyaw:.2f})")
 
         #print(F"steps:{self.episode_steps} reward:{reward:.2f}")
 
@@ -858,7 +858,8 @@ class MiniPupperEnv(gym.Env):
             # 1. 各軸の「目標」と「現実」の誤差の二乗を計算
             actual_vx =  self.ros.get_forward_velocity()
             actual_vy =  self.ros.get_side_velocity()
-            actual_vyaw =  self.ros.get_yaw_velocity()
+            actual_vyaw,imu_actual_vyaw =  self.ros.get_yaw_velocity()
+            self.diff_actual_vyaw = actual_vyaw - imu_actual_vyaw
 
             cmd_vx=self.cmd_vel[0]
             cmd_vy=self.cmd_vel[1]
@@ -868,6 +869,7 @@ class MiniPupperEnv(gym.Env):
             error_vx = (cmd_vx - actual_vx) ** 2
             error_vy = (cmd_vy - actual_vy) ** 2
             error_vz = (cmd_vyaw - actual_vyaw) ** 2  # 回転速度
+            #error_vz = (cmd_vyaw - imu_actual_vyaw) ** 2  # 回転速度
 
             # 指数関数の「一括マイナス」方式（Isaac Gym / rsl_rl 標準）
             if self.use_rsl_rl_norm:
@@ -876,6 +878,7 @@ class MiniPupperEnv(gym.Env):
                     error_vx *= 2.0  # 逆走は誤差を2倍重く評価して exp の外に追いやる
                 if (abs(cmd_vy) >= 0.01) and (cmd_vy * actual_vy < 0.0):
                     error_vy *= 2.0
+                #if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * imu_actual_vyaw < 0.0):
                 if (abs(cmd_vyaw) >= 0.01) and (cmd_vyaw * actual_vyaw < 0.0):
                     error_vz *= 2.0
 
@@ -890,12 +893,15 @@ class MiniPupperEnv(gym.Env):
                 sigma = 0.04
                 #sigma = 0.25
                 #sigma = 0.12
+                sigma17= 0.17
                 # 下記 3つは、Log 確認用です。実際の reward には、使いません。
                 reward_vx = np.exp(-error_vx / sigma)  # 0.05 ナロー
                 reward_vy = np.exp(-error_vy / sigma)  # 0.0 〜 1.0
-                reward_vz = np.exp(-error_vz / sigma)
+                reward_vz = np.exp(-error_vz / sigma17)
 
-                sigma3=0.12
+                #sigma3=0.12
+                #sigma3=sigma17  # 0.17
+                sigma3=0.2  # 0.2
                 # 3. Mini Pupperの速度スケールに合わせたナローなシグマ（0.04 〜 0.05 * 3）
                 total_vel_reward = np.exp(-weighted_error / sigma3)
                 # もし 10^-4 (0.0001) 以下のゴミのような微小値なら、完全に0に丸める（ピクつき防止）
@@ -916,6 +922,7 @@ class MiniPupperEnv(gym.Env):
                 # 3. 旋回速度 (vz / vyaw) の評価 [目標が大きいほど高報酬]
                 # -------------------------------------------------------------
                 base_reward_vz,weight_vz = self.speed_reward_comp(actual_vyaw,cmd_vyaw, MAX_ANG_Z)
+                #base_reward_vz,weight_vz = self.speed_reward_comp(imu_actual_vyaw,cmd_vyaw, MAX_ANG_Z)
                 reward_vz = base_reward_vz * weight_vz * 0.5    # 0.5 は、重み付け
 
             # -------------------------------------------------------------

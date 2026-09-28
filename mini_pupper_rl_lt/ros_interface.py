@@ -281,14 +281,14 @@ class MiniPupperROSInterface(Node):
         self.yaw_velocity = msg.angular_velocity.z
 
         # 正規化を施す
-        r_vel_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
-        p_vel_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
-        y_vel_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
+        #r_vel_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
+        #p_vel_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
+        #y_vel_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
 
             # 💡 リストに突っ込む（蓄積）
-        self.step_roll_vel_list.append(r_vel_norm)
-        self.step_pitch_vel_list.append(p_vel_norm)
-        self.step_yaw_vel_list.append(y_vel_norm)
+        self.step_roll_vel_list.append(self.roll_velocity)
+        self.step_pitch_vel_list.append(self.pitch_velocity)
+        self.step_yaw_vel_list.append(self.yaw_velocity)
 
         self.pitch_velocity_buffer.append(self.pitch_velocity)
 
@@ -419,10 +419,8 @@ class MiniPupperROSInterface(Node):
             pass
         return rc
 
-    def update_step_observations(self):
-        """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
-        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
-
+    def wait_current_joint_velocity(self):
+        rc=True
         # 1. 関節速度の一括平均
         if len(self.step_joint_vel_list) > 0:
             i = len(self.step_joint_vel_list)
@@ -430,25 +428,53 @@ class MiniPupperROSInterface(Node):
             # axis=0 で縦方向に平均を取ることで、12次元配列が返ってきます
             self.joint_velocity = np.mean(self.step_joint_vel_list[i:], axis=0)
             self.step_joint_vel_list.clear() # 次のステップのために空にする
+        else:
+            rc=False
+        return rc
+
+    def update_step_observations(self):
+        """ Envの step() の最初、または Observation 取得の直前に1回だけ呼び出す """
+        """ Envのstep()から、Observation（または報酬計算）を要求された時に呼ばれる想定 """
             
-        # 2. IMU角速度の一括平均
+        # 1. IMU角速度の一括平均
         if len(self.step_roll_vel_list) > 0:
             i = len(self.step_roll_vel_list)
             i = 2 if i > 3 else 0
-            self.roll_velocity_norm = np.mean(self.step_roll_vel_list[i:])
-            self.pitch_velocity_norm = np.mean(self.step_pitch_vel_list[i:])
-            self.yaw_velocity_norm = np.mean(self.step_yaw_vel_list[i:])
+            r_vel_raw = np.mean(self.step_roll_vel_list[i:])
+            p_vel_raw = np.mean(self.step_pitch_vel_list[i:])
+            y_vel_raw = np.mean(self.step_yaw_vel_list[i:])
+            #y_vel_raw = self.step_yaw_vel_list[-1]
+            self.imu_actual_vyaw = y_vel_raw
             
             # 平均化した角速度ベースで現在の運動エネルギーを再計算（ノイズレス！）
             # ※元の単位に戻すため 0.15 で割っています
-            r_vel_raw = self.roll_velocity_norm / 0.15
-            y_vel_raw = self.yaw_velocity_norm / 0.15
+            #r_vel_raw = self.roll_velocity_norm
+            #y_vel_raw = self.yaw_velocity_norm
             self.current_motion = r_vel_raw**2 + y_vel_raw**2
-            
+
+            # model input 用にノーマライズする。
+            self.roll_velocity_norm = np.clip(r_vel_raw * 0.15, -1.0, 1.0)
+            #self.roll_velocity_norm = np.clip(r_vel_raw * 0.3, -1.0, 1.0)
+            self.pitch_velocity_norm = np.clip(p_vel_raw * 0.15, -1.0, 1.0)
+            #self.pitch_velocity_norm = np.clip(p_vel_raw * 0.3, -1.0, 1.0)
+            self.yaw_velocity_norm = np.clip(y_vel_raw * 0.15, -1.0, 1.0)
+            #self.yaw_velocity_norm = np.clip(y_vel_raw * 0.3, -1.0, 1.0)
+
             # リストのクリア
             self.step_roll_vel_list.clear()
             self.step_pitch_vel_list.clear()
             self.step_yaw_vel_list.clear()
+        else:
+            print("step_roll_vel_list lng:0")
+
+        # 2. 関節速度の一括平均
+        for _ in range(20):
+            rc=self.wait_current_joint_velocity()
+            if rc==True:
+                break
+            rclpy.spin_once(self, timeout_sec=0.001)
+        if rc==False:
+            print(F'step_joint_vel_list lng:0')
 
         for _ in range(20):
             rc=self.wait_current_velocity()
@@ -517,7 +543,7 @@ class MiniPupperROSInterface(Node):
 
     def get_yaw_velocity(self):
         #return getattr(self, 'current_vyaw', 0.0)
-        return self.current_vyaw
+        return self.current_vyaw, self.imu_actual_vyaw
 
     def get_pitch_velocity(self):
         if len(self.pitch_velocity_buffer) > 0:
