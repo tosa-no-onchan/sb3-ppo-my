@@ -848,7 +848,7 @@ class MiniPupperEnv(gym.Env):
             actual_vyaw,imu_actual_vyaw =  self.ros.get_yaw_velocity()
             self.diff_actual_vyaw = actual_vyaw - imu_actual_vyaw
 
-            cur_actual_vyaw = imu_actual_vyaw
+            cur_actual_vyaw = actual_vyaw
 
             cmd_vx=self.cmd_vel[0]
             cmd_vy=self.cmd_vel[1]

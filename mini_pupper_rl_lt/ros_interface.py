@@ -299,7 +299,7 @@ class MiniPupperROSInterface(Node):
         self.step_pitch_vel_list.append(self.pitch_velocity)
         self.step_yaw_vel_list.append(self.yaw_velocity)
 
-        """IMUから線形加速度を取得するコールバック"""
+        """IMUから線形加速度を取得する"""
         self.step_linear_accel_x_list.append(msg.linear_acceleration.x)
         self.step_linear_accel_y_list.append(msg.linear_acceleration.y)
         self.step_linear_accel_z_list.append(msg.linear_acceleration.z)
@@ -450,12 +450,16 @@ class MiniPupperROSInterface(Node):
         rc=True
         # 1. IMU角速度の一括平均
         if len(self.step_roll_vel_list) > 0:
-            i = len(self.step_roll_vel_list)
-            i = 2 if i > 3 else 0
-            r_vel_raw = np.mean(self.step_roll_vel_list[i:])
-            p_vel_raw = np.mean(self.step_pitch_vel_list[i:])
-            y_vel_raw = np.mean(self.step_yaw_vel_list[i:])
-            #y_vel_raw = self.step_yaw_vel_list[-1]
+            #i = len(self.step_roll_vel_list)
+            #i = 2 if i > 3 else 0
+            # mean
+            #r_vel_raw = np.mean(self.step_roll_vel_list[i:])
+            #p_vel_raw = np.mean(self.step_pitch_vel_list[i:])
+            #y_vel_raw = np.mean(self.step_yaw_vel_list[i:])
+            # one shot
+            r_vel_raw = self.step_roll_vel_list[-1]
+            p_vel_raw = self.step_pitch_vel_list[-1]
+            y_vel_raw = self.step_yaw_vel_list[-1]
             self.imu_actual_vyaw = y_vel_raw
             
             # 平均化した角速度ベースで現在の運動エネルギーを再計算（ノイズレス！）
@@ -473,15 +477,15 @@ class MiniPupperROSInterface(Node):
             #self.yaw_velocity_norm = np.clip(y_vel_raw * 0.3, -1.0, 1.0)
 
 
-            # linear_accel x,y,z
-            x_acc_raw = np.mean(self.step_linear_accel_x_list)
-            y_acc_raw = np.mean(self.step_linear_accel_y_list)
-            z_acc_raw = np.mean(self.step_linear_accel_z_list)
+            # linear_accel x,y,z one shot
+            x_acc_raw = self.step_linear_accel_x_list[-1]
+            y_acc_raw = self.step_linear_accel_y_list[-1]
+            z_acc_raw = self.step_linear_accel_z_list[-1]
 
             # model input 用にノーマライズする。
             self.linear_accel_x_norm = np.clip(x_acc_raw / MAX_ACCEL, -1.0, 1.0)
             self.linear_accel_y_norm = np.clip(y_acc_raw / MAX_ACCEL, -1.0, 1.0)
-            self.linear_accel_x_norm = np.clip(z_acc_raw / MAX_ACCEL, -1.0, 1.0)
+            self.linear_accel_z_norm = np.clip(z_acc_raw / MAX_ACCEL, -1.0, 1.0)
 
             # リストのクリア
             self.step_roll_vel_list.clear()
@@ -554,7 +558,7 @@ class MiniPupperROSInterface(Node):
                 [
                     self.linear_accel_x_norm,
                     self.linear_accel_y_norm,
-                    self.linear_accel_x_norm,
+                    self.linear_accel_z_norm,
                 ],
 
             ]
