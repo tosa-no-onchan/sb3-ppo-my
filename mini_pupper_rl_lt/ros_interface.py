@@ -22,7 +22,9 @@ from collections import deque  # 1. ライブラリをインポート
 # 設計した最大値の定義
 #MAX_LIN_X = 0.8  # m/s
 #MAX_LIN_X = 0.26  # m/s
-MAX_LIN_X = 0.5  # m/s  mini pupper2 推奨速度
+#MAX_LIN_X = 0.5  # m/s  mini pupper2 推奨速度
+MAX_LIN_X = 0.8  # m/s  changed by nishi 2026.9.29
+MAX_LIN_X_BACK = 0.5  # m/s changed by nishi 2026.9.29
 #MAX_LIN_Y = 0.4  # m/s
 #MAX_LIN_Y = 0.13  # m/s
 MAX_LIN_Y = 0.5  # m/s mini pupper2 推奨速度
@@ -36,6 +38,9 @@ MAX_JOINT_RAD = 1.57
 MAX_JOINT_RAD20 = 1.57 * 20.0 / 90.0
 # 速度もノーマライズ（最大値を15.0 rad/sと仮定）
 MAX_JOINT_VEL = 15.0
+
+# 最大加速度を 20.0 m/s^2 (約 2G) と仮定してノーマライズ
+MAX_ACCEL = 20.0
 
 # 1. 基準となるコントローラーの関節順を定義（クラスの初期化時などに配置）
 CONTROLLER_JOINT_ORDER = [
@@ -186,6 +191,10 @@ class MiniPupperROSInterface(Node):
         self.step_vy_list = []
         self.step_vyaw_list = []
 
+        self.step_linear_accel_x_list = []
+        self.step_linear_accel_y_list = []
+        self.step_linear_accel_z_list = []
+
         self.current_vx = 0.0
         self.current_vy = 0.0
         self.current_vyaw = 0.0
@@ -285,10 +294,15 @@ class MiniPupperROSInterface(Node):
         #p_vel_norm = np.clip(self.pitch_velocity * 0.15, -1.0, 1.0)
         #y_vel_norm = np.clip(self.yaw_velocity * 0.15, -1.0, 1.0)
 
-            # 💡 リストに突っ込む（蓄積）
+        # 💡 リストに突っ込む（蓄積）
         self.step_roll_vel_list.append(self.roll_velocity)
         self.step_pitch_vel_list.append(self.pitch_velocity)
         self.step_yaw_vel_list.append(self.yaw_velocity)
+
+        """IMUから線形加速度を取得するコールバック"""
+        self.step_linear_accel_x_list.append(msg.linear_acceleration.x)
+        self.step_linear_accel_y_list.append(msg.linear_acceleration.y)
+        self.step_linear_accel_z_list.append(msg.linear_acceleration.z)
 
         self.pitch_velocity_buffer.append(self.pitch_velocity)
 
@@ -458,10 +472,26 @@ class MiniPupperROSInterface(Node):
             self.yaw_velocity_norm = np.clip(y_vel_raw * 0.15, -1.0, 1.0)
             #self.yaw_velocity_norm = np.clip(y_vel_raw * 0.3, -1.0, 1.0)
 
+
+            # linear_accel x,y,z
+            x_acc_raw = np.mean(self.step_linear_accel_x_list)
+            y_acc_raw = np.mean(self.step_linear_accel_y_list)
+            z_acc_raw = np.mean(self.step_linear_accel_z_list)
+
+            # model input 用にノーマライズする。
+            self.linear_accel_x_norm = np.clip(x_acc_raw / MAX_ACCEL, -1.0, 1.0)
+            self.linear_accel_y_norm = np.clip(y_acc_raw / MAX_ACCEL, -1.0, 1.0)
+            self.linear_accel_x_norm = np.clip(z_acc_raw / MAX_ACCEL, -1.0, 1.0)
+
             # リストのクリア
             self.step_roll_vel_list.clear()
             self.step_pitch_vel_list.clear()
             self.step_yaw_vel_list.clear()
+
+            self.step_linear_accel_x_list.clear()
+            self.step_linear_accel_y_list.clear()
+            self.step_linear_accel_z_list.clear()
+
         else:
             #print("step_roll_vel_list lng:0")
             rc=False
@@ -521,6 +551,12 @@ class MiniPupperROSInterface(Node):
                     self.pitch_velocity_norm,  # 💡 Y を先に配置
                     self.yaw_velocity_norm,    # 💡 Z を最後に配置
                 ],
+                [
+                    self.linear_accel_x_norm,
+                    self.linear_accel_y_norm,
+                    self.linear_accel_x_norm,
+                ],
+
             ]
         )
         return obs.astype(
@@ -539,6 +575,10 @@ class MiniPupperROSInterface(Node):
         self.step_roll_vel_list.clear()
         self.step_pitch_vel_list.clear()
         self.step_yaw_vel_list.clear()
+
+        self.step_linear_accel_x_list.clear()
+        self.step_linear_accel_y_list.clear()
+        self.step_linear_accel_z_list.clear()
 
         msg = Float64MultiArray()
         msg.data = action.tolist()
@@ -666,6 +706,10 @@ class MiniPupperROSInterface(Node):
         self.step_roll_vel_list.clear()
         self.step_pitch_vel_list.clear()
         self.step_yaw_vel_list.clear()
+
+        self.step_linear_accel_x_list.clear()
+        self.step_linear_accel_y_list.clear()
+        self.step_linear_accel_z_list.clear()
 
         # ⭕【追加】ワープ時に仮想オドメトリも完全に原点へリセット
         self.pupper_virt_odom['x'] = 0.0

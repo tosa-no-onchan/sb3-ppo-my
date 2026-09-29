@@ -4,7 +4,7 @@ import gymnasium as gym
 
 import numpy as np
 
-from ros_interface import MiniPupperROSInterface, MAX_LIN_X , MAX_LIN_Y , MAX_ANG_Z, MAX_JOINT_RAD, MAX_JOINT_RAD20
+from ros_interface import MiniPupperROSInterface, MAX_LIN_X ,MAX_LIN_X_BACK , MAX_LIN_Y , MAX_ANG_Z, MAX_JOINT_RAD, MAX_JOINT_RAD20
 
 import subprocess
 import rclpy
@@ -33,7 +33,7 @@ class MiniPupperEnv(gym.Env):
 
         # --- 【追加】時系列（履歴）の設定 ---
         self.history_len = 6
-        self.raw_obs_dim = 34  # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3)
+        self.raw_obs_dim = 37  # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3)
         #
         # Observation
         #
@@ -46,7 +46,7 @@ class MiniPupperEnv(gym.Env):
             #shape=(19,),      # cmd_vel(3) + joint12 + quat(4)
             #shape=(31,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
             #shape=(34,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3)
-            shape=(self.history_len, self.raw_obs_dim),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3)
+            shape=(self.history_len, self.raw_obs_dim),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3)
             dtype=np.float32,
         )
         #
@@ -388,71 +388,81 @@ class MiniPupperEnv(gym.Env):
         elif self.test_id==9:
             vx= MAX_LIN_X 
         elif self.test_id==10:
-            vx= MAX_LIN_X * -0.5 * 0.1
+            vx= MAX_LIN_X 
         elif self.test_id==11:
-            vx= MAX_LIN_X * -0.5 * 0.2
+            vx= MAX_LIN_X 
         elif self.test_id==12:
-            vx= MAX_LIN_X * -0.5 * 0.3
+            vx= -MAX_LIN_X_BACK * 0.1
         elif self.test_id==13:
-            vx= MAX_LIN_X * -0.5 * 0.4
+            vx= -MAX_LIN_X_BACK * 0.2
         elif self.test_id==14:
-            vx= MAX_LIN_X * -0.5 * 0.5
+            vx= -MAX_LIN_X_BACK * 0.3
         elif self.test_id==15:
-            vx= MAX_LIN_X * -0.5 * 0.6
+            vx= -MAX_LIN_X_BACK * 0.4
         elif self.test_id==16:
-            vx= MAX_LIN_X * -0.5 * 0.7
+            vx= -MAX_LIN_X_BACK * 0.5
         elif self.test_id==17:
-            vx= MAX_LIN_X * -0.5 * 0.8
+            vx= -MAX_LIN_X_BACK * 0.6
         elif self.test_id==18:
-            vx= MAX_LIN_X * -0.5 * 0.9
+            vx= -MAX_LIN_X_BACK * 0.7
         elif self.test_id==19:
-            v_yaw=  MAX_ANG_Z *0.1
+            vx= -MAX_LIN_X_BACK * 0.8
         elif self.test_id==20:
-            v_yaw= MAX_ANG_Z * -0.1
+            vx= -MAX_LIN_X_BACK * 0.9
         elif self.test_id==21:
-            v_yaw=  MAX_ANG_Z *0.2
+            vx= -MAX_LIN_X_BACK
         elif self.test_id==22:
-            v_yaw= MAX_ANG_Z * -0.2
+            vx= -MAX_LIN_X_BACK
         elif self.test_id==23:
-            v_yaw=  MAX_ANG_Z *0.3
+            vx= -MAX_LIN_X_BACK
         elif self.test_id==24:
-            v_yaw= MAX_ANG_Z * -0.3
+            v_yaw=  MAX_ANG_Z *0.1
         elif self.test_id==25:
-            v_yaw=  MAX_ANG_Z *0.4
+            v_yaw= MAX_ANG_Z * -0.1
         elif self.test_id==26:
-            v_yaw= MAX_ANG_Z * -0.4
+            v_yaw=  MAX_ANG_Z *0.2
         elif self.test_id==27:
-            v_yaw=  MAX_ANG_Z *0.5
+            v_yaw= MAX_ANG_Z * -0.2
         elif self.test_id==28:
-            v_yaw= MAX_ANG_Z * -0.5
+            v_yaw=  MAX_ANG_Z *0.3
         elif self.test_id==29:
-            v_yaw= MAX_ANG_Z * 0.6
+            v_yaw= MAX_ANG_Z * -0.3
         elif self.test_id==30:
-            v_yaw= MAX_ANG_Z * -0.6
+            v_yaw=  MAX_ANG_Z *0.4
         elif self.test_id==31:
-            v_yaw= MAX_ANG_Z * 0.7
+            v_yaw= MAX_ANG_Z * -0.4
         elif self.test_id==32:
-            v_yaw= MAX_ANG_Z * -0.7
+            v_yaw=  MAX_ANG_Z *0.5
         elif self.test_id==33:
-            v_yaw= MAX_ANG_Z * 0.8
+            v_yaw= MAX_ANG_Z * -0.5
         elif self.test_id==34:
-            v_yaw= MAX_ANG_Z * -0.8
+            v_yaw= MAX_ANG_Z * 0.6
         elif self.test_id==35:
-            v_yaw= MAX_ANG_Z * 0.9
+            v_yaw= MAX_ANG_Z * -0.6
         elif self.test_id==36:
-            v_yaw= MAX_ANG_Z * -0.9
+            v_yaw= MAX_ANG_Z * 0.7
         elif self.test_id==37:
-            v_yaw= MAX_ANG_Z
+            v_yaw= MAX_ANG_Z * -0.7
         elif self.test_id==38:
-            v_yaw= MAX_ANG_Z * -1.0
+            v_yaw= MAX_ANG_Z * 0.8
         elif self.test_id==39:
+            v_yaw= MAX_ANG_Z * -0.8
+        elif self.test_id==40:
+            v_yaw= MAX_ANG_Z * 0.9
+        elif self.test_id==41:
+            v_yaw= MAX_ANG_Z * -0.9
+        elif self.test_id==42:
+            v_yaw= MAX_ANG_Z
+        elif self.test_id==43:
+            v_yaw= MAX_ANG_Z * -1.0
+        elif self.test_id==44:
             # -1.0 から 1.0
             v_yaw= np.random.randint(-10, 11) * 0.1
-        elif self.test_id==40:
+        elif self.test_id==45:
             # 最小: -15 * 0.01 = -0.25
             # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50) (0.01刻み -> 75パターン)
-            vx = np.random.randint(-25, 51) * 0.01
-        elif self.test_id==41:
+            vx = np.random.randint(-50, 101) * 0.01
+        elif self.test_id==46:
             pass
         else:
             if False:
@@ -466,7 +476,7 @@ class MiniPupperEnv(gym.Env):
                 rand_z = np.random.randint(-10, 10, size=5) / 10.0 # -1.0 から 1.0 の 0.1 単位の乱数の予定
 
             # x（前後）: -0.25 〜 0.5 (0.05刻み -> 16パターン)
-            cmd_x = np.random.randint(-5, 11) * 0.05
+            cmd_x = np.random.randint(-5, 11) * 0.1
             # z（旋回 yaw角速度）: -1.0 〜 1.0 (0.1刻み -> 21パターン) 
             # ※もしzの範囲や刻みが別であれば数値を調整してください
             cmd_z = np.random.randint(-10, 11) * 0.1 
@@ -479,7 +489,7 @@ class MiniPupperEnv(gym.Env):
         self.test_id += 1
         #if self.test_id > 12:
         #if self.test_id > 18:
-        if self.test_id > 56:
+        if self.test_id > 66:
             self.test_id=0
 
     def step(self, action):
