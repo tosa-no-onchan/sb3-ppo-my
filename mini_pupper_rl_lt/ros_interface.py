@@ -495,7 +495,6 @@ class MiniPupperROSInterface(Node):
             self.step_linear_accel_x_list.clear()
             self.step_linear_accel_y_list.clear()
             self.step_linear_accel_z_list.clear()
-
         else:
             #print("step_roll_vel_list lng:0")
             rc=False

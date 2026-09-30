@@ -461,7 +461,7 @@ class MiniPupperEnv(gym.Env):
         elif self.test_id==45:
             # 最小: -15 * 0.01 = -0.25
             # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50) (0.01刻み -> 75パターン)
-            vx = np.random.randint(-50, 101) * 0.01
+            vx = np.random.randint(-50, 81) * 0.01
         elif self.test_id==46:
             pass
         else:
@@ -476,7 +476,9 @@ class MiniPupperEnv(gym.Env):
                 rand_z = np.random.randint(-10, 10, size=5) / 10.0 # -1.0 から 1.0 の 0.1 単位の乱数の予定
 
             # x（前後）: -0.25 〜 0.5 (0.05刻み -> 16パターン)
-            cmd_x = np.random.randint(-5, 11) * 0.1
+            cmd_x = np.random.randint(-5, 9) * 0.1
+            #cmd_x = np.random.randint(-50, 81) * 0.01
+
             # z（旋回 yaw角速度）: -1.0 〜 1.0 (0.1刻み -> 21パターン) 
             # ※もしzの範囲や刻みが別であれば数値を調整してください
             cmd_z = np.random.randint(-10, 11) * 0.1 
