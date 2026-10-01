@@ -42,6 +42,13 @@ MAX_JOINT_VEL = 15.0
 # 最大加速度を 20.0 m/s^2 (約 2G) と仮定してノーマライズ
 MAX_ACCEL = 20.0
 
+# Mini Pupper 2 の想定最大速度（目安: 0.4 m/s）の逆数をスケールとする
+# 1.0 / 0.4 = 2.5
+#SPEED_SCALE = 2.5 
+# 注) 今回は、 0.8 m/s を予定
+# 1.0 / 0.8 = 1.25
+SPEED_SCALE = 1.25 
+
 # 1. 基準となるコントローラーの関節順を定義（クラスの初期化時などに配置）
 CONTROLLER_JOINT_ORDER = [
     "base_lf1", "lf1_lf2", "lf2_lf3",  # 左前
@@ -349,7 +356,7 @@ class MiniPupperROSInterface(Node):
         if dt <= 0 or dt > 0.1:
             dt = 0.02  # 標準の20msで代替
 
-        # 💡 [ご提案の処理] 速度の初回初期化チェック
+        # 速度の初回初期化チェック
         if self.calc_speed_x is None:
             # 初回はフィルターを通さず、最初の純粋な速度をそのまま代入
             self.calc_speed_x = x_acc_pure * dt
@@ -563,9 +570,9 @@ class MiniPupperROSInterface(Node):
             self.linear_accel_z_norm = np.clip(z_acc_raw / MAX_ACCEL, -1.0, 1.0)
 
             # 強化学習の観測値用にクリッピング & ノーマライズして返す
-            self.speed_x_norm = np.clip(self.calc_speed_x * 1.0, -1.0, 1.0)
-            self.speed_y_norm = np.clip(self.calc_speed_y * 1.0, -1.0, 1.0)
-            self.speed_z_norm = np.clip(self.calc_speed_z * 1.0, -1.0, 1.0)
+            self.speed_x_norm = np.clip(self.calc_speed_x * SPEED_SCALE, -1.0, 1.0)
+            self.speed_y_norm = np.clip(self.calc_speed_y * SPEED_SCALE, -1.0, 1.0)
+            self.speed_z_norm = np.clip(self.calc_speed_z * SPEED_SCALE, -1.0, 1.0)
 
             # リストのクリア
             self.step_roll_vel_list.clear()
