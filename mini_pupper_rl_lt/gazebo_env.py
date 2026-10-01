@@ -34,7 +34,7 @@ class MiniPupperEnv(gym.Env):
 
         # --- 【追加】時系列（履歴）の設定 ---
         self.history_len = 6
-        self.raw_obs_dim = 37  # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3)
+        self.raw_obs_dim = 40  # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3) + speed[3]
         #
         # Observation
         #
@@ -47,7 +47,7 @@ class MiniPupperEnv(gym.Env):
             #shape=(19,),      # cmd_vel(3) + joint12 + quat(4)
             #shape=(31,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4)
             #shape=(34,),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3)
-            shape=(self.history_len, self.raw_obs_dim),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3)
+            shape=(self.history_len, self.raw_obs_dim),       # cmd_vel(3) + joint_pos(12) + joint_vel(12) + quat(4) + imu_vel(3) + linear_accel(3) + speed(3)
             dtype=np.float32,
         )
         #

@@ -200,8 +200,12 @@ class MiniPupperROSInterface(Node):
         self.current_vyaw = 0.0
 
         self.latest_sim_time=0.0
-
         self.last_yaw= 0.0
+
+        self.calc_speed_x = 0.0
+        self.calc_speed_y = 0.0
+        self.calc_speed_z = 0.0
+
 
         # ⭕【追加】仮想オドメトリ変数の構築（初期値は原点）
         self.pupper_virt_odom = {
@@ -282,7 +286,12 @@ class MiniPupperROSInterface(Node):
         self.quat[3] = msg.orientation.w
         self.roll, self.pitch, self.yaw = euler_from_quaternion_np(self.quat)
 
-        self.latest_sim_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        cur_sim_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self.latest_sim_time > 0.0:
+            dt = cur_sim_time - self.latest_sim_time
+        else:
+            dt=0.0
+        self.latest_sim_time = cur_sim_time
 
         # 生の角速度を取得
         self.roll_velocity = msg.angular_velocity.x
@@ -300,9 +309,36 @@ class MiniPupperROSInterface(Node):
         self.step_yaw_vel_list.append(self.yaw_velocity)
 
         """IMUから線形加速度を取得する"""
-        self.step_linear_accel_x_list.append(msg.linear_acceleration.x)
-        self.step_linear_accel_y_list.append(msg.linear_acceleration.y)
-        self.step_linear_accel_z_list.append(msg.linear_acceleration.z)
+        x_acc_raw = msg.linear_acceleration.x
+        y_acc_raw = msg.linear_acceleration.y
+        z_acc_raw = msg.linear_acceleration.z
+        self.step_linear_accel_x_list.append(x_acc_raw)
+        self.step_linear_accel_y_list.append(y_acc_raw)
+        self.step_linear_accel_z_list.append(z_acc_raw)
+
+        # 簡易 speed 計算
+        # imu rate average rate: 50.767 から 47.702  48[hz] -> 1/ 48.0 = 0.020833333333333332
+        # 異常な dt のガード (初回やラグ対策)
+        if dt <= 0 or dt > 0.1:
+            dt = 0.02  # 標準の20msで代替
+
+        # ② リーキー積分 (過去の速度を 5% ずつ減衰させてドリフトを防ぐ)
+        alpha = 0.95
+        
+        # 加速度から速度への変換 (簡易版)
+        self.calc_speed_x = alpha * self.calc_speed_x + (1 - alpha) * (x_acc_raw * dt)
+        self.calc_speed_y = alpha * self.calc_speed_y + (1 - alpha) * (y_acc_raw * dt)
+        self.calc_speed_z = alpha * self.calc_speed_z + (1 - alpha) * (z_acc_raw * dt)
+
+        if len(self.step_joint_vel_list) > 0:
+            # axis=0 で縦方向に平均を取ることで、12次元配列が返ってきます
+            tmp_joint_velocity = np.mean(self.step_joint_vel_list, axis=0)
+            cur_joint_velocity = np.mean(tmp_joint_velocity)
+            if cur_joint_velocity < 0.05:
+                # 完全に0にすると学習が不連続になるため、徐々に0に落とすか、完全にリセット
+                self.calc_speed_x *= 0.5
+                self.calc_speed_y *= 0.5
+                self.calc_speed_z *= 0.5
 
         self.pitch_velocity_buffer.append(self.pitch_velocity)
 
@@ -493,6 +529,11 @@ class MiniPupperROSInterface(Node):
             self.linear_accel_y_norm = np.clip(y_acc_raw / MAX_ACCEL, -1.0, 1.0)
             self.linear_accel_z_norm = np.clip(z_acc_raw / MAX_ACCEL, -1.0, 1.0)
 
+            # 強化学習の観測値用にクリッピング & ノーマライズして返す
+            self.speed_x_norm = np.clip(self.calc_speed_x * 1.0, -1.0, 1.0)
+            self.speed_y_norm = np.clip(self.calc_speed_y * 1.0, -1.0, 1.0)
+            self.speed_z_norm = np.clip(self.calc_speed_z * 1.0, -1.0, 1.0)
+
             # リストのクリア
             self.step_roll_vel_list.clear()
             self.step_pitch_vel_list.clear()
@@ -501,6 +542,10 @@ class MiniPupperROSInterface(Node):
             self.step_linear_accel_x_list.clear()
             self.step_linear_accel_y_list.clear()
             self.step_linear_accel_z_list.clear()
+
+            self.calc_speed_x=0.0
+            self.calc_speed_y=0.0
+            self.calc_speed_z=0.0
         else:
             #print("step_roll_vel_list lng:0")
             rc=False
@@ -565,6 +610,11 @@ class MiniPupperROSInterface(Node):
                     self.linear_accel_y_norm,
                     self.linear_accel_z_norm,
                 ],
+                [
+                    self.speed_x_norm,
+                    self.speed_y_norm,
+                    self.speed_z_norm,
+                ]
 
             ]
         )
@@ -733,3 +783,7 @@ class MiniPupperROSInterface(Node):
         self.yaw_velocity_norm=0.0    # 💡 Z を最後に配置
 
         self.velocities=None
+
+        self.calc_speed_x = 0.0
+        self.calc_speed_y = 0.0
+        self.calc_speed_z = 0.0
