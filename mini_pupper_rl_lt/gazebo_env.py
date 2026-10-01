@@ -23,7 +23,8 @@ ROLL_IDX = CMD_DIM + JOINT_DIM      # 15
 PITCH_IDX = ROLL_IDX + 1            # 16
 
 # 例：基準姿勢（Nominal Pose）からの最大変化量を 0.5 rad（約28.6度）に制限する場合
-MAX_ACTION_RAD = 0.5        # ここが、ベース。あくまで、 Gazebo 上の話!!
+#MAX_ACTION_RAD = 0.5        # ここが、ベース。あくまで、 Gazebo 上の話!!
+MAX_ACTION_RAD = 0.8        # speed が付いていけないでの、こちらにする。 2026.9.30
 #MAX_ACTION_RAD = 1.0        # 実機と同じ足の速度にするなら、こちら
 
 class MiniPupperEnv(gym.Env):
@@ -114,7 +115,8 @@ class MiniPupperEnv(gym.Env):
         #self.min_height = 0.11   # 目標とする地上高 Pupper 高さ - 1[cm]
         self.z_sigma = 0.04   # 許容するブレ幅の感度 low 側
         self.z_sigma_high = 0.02 # 許容するブレ幅の感度 high 側
-        self.limit_low=0.05     # 最低地上高
+        #self.limit_low=0.05     # 最低地上高
+        self.limit_low=0.045     # 最低地上高
 
         #self.max_height = 0.15  # 最高地上高 (0.15m)。これ以上はペナルティ最大
         self.max_height = 0.145  # 最高地上高 (0.145m)。これ以上はペナルティ最大
@@ -1001,66 +1003,6 @@ class MiniPupperEnv(gym.Env):
         #print(F'compute_reward():#2 reward:{reward:.3f}')
         return float(reward)
 
-    def body_move_check(self):
-        # 回転角速度
-        current_vyaw = self.ros.get_yaw_velocity()
-        # 前進速度
-        current_vx =self.ros.get_forward_velocity()
-        # 横移動速度
-        current_vy =self.ros.get_side_velocity()
-
-        # 1. 実際の胴体の「平面移動スピード」を計算 [m/s]
-        actual_linear_speed = np.linalg.norm([
-            #self.actual_linear_vel.x,
-            current_vx,
-            #self.actual_linear_vel.y
-            current_vy
-        ])
-        # 2. 実際の胴体の「旋回（Yaw）スピードの絶対値」を取得 [rad/s]
-        # ※ロボットが横転したときのブレ（Roll/Pitch）を除外するため、Z軸（Yaw）の回転だけを見ます
-        #actual_angular_speed = abs(self.actual_angular_vel.z)
-        actual_angular_speed = abs(current_vyaw)
-
-        # 3. AIから課されている「指令速度」の大きさを計算
-        target_linear_speed = np.linalg.norm([self.cmd_vel[0], self.cmd_vel[1]])
-        target_angular_speed = abs(self.cmd_vel[2])
-
-        # 4. サボり判定用の閾値（しきい値）を設定
-        # 命令が出ている（> 0.05）のに、実際の動きが極小（< 0.03）ならサボりとみなす
-        is_linear_lazy = (target_linear_speed > 0.05) and (actual_linear_speed < 0.03)
-        is_angular_lazy = (target_angular_speed > 0.05) and (actual_angular_speed < 0.03)
-
-        # 5. 条件判定：移動命令か回転命令のどちらかで「サボり」が発生しているか
-        if is_linear_lazy or is_angular_lazy:
-            # 【サボり確定】一発レッドカードの特大マイナス
-            #penalty = -10.0
-            #penalty = -0.5  
-            penalty = -1.0  
-            #penalty = -0.7
-            # print("😑 命令が出ているのに、胴体の移動または回転が完全に止まっています！")
-        else:
-            penalty = 0.0
-        return penalty
-
-    def move_check(self):
-        penalty = 0.0
-        # cmd_vel は、停止以外
-        if np.sum(np.abs(self.cmd_vel)) > 0.0:
-            if self.ros.velocities is not None:
-                # 1. 全関節速度の「絶対値の平均」を算出する
-                mean_velocity = np.mean(np.abs(self.ros.velocities))
-                
-                # 2. 閾値（例: 0.02 rad/s 以下ならサボりとみなす）
-                # ※実機の挙動を見ながら 0.01 〜 0.05 あたりで微調整してください
-                #if mean_velocity < 0.02:
-                if mean_velocity < 0.05:
-                    # 【サボり確定】毎ステップの報酬から引くための大きなマイナス値を返す
-                    penalty = -10.0  
-                else:
-                    # ちゃんと足を動かしているならペナルティはゼロ
-                    penalty = 0.0
-        return penalty
-
     #---
     # 転倒、致命的 コースズレ判定
     #---
@@ -1081,20 +1023,8 @@ class MiniPupperEnv(gym.Env):
         if True:
             if actual_z < self.limit_low: 
                 print(f"伏せしたので、お説教！ (高さ: {actual_z:.3f}M)")
-                #return True,-20.0
-                return True,-10.0
-
-        if False:
-            #move_penalty = self.move_check()
-            move_penalty = self.body_move_check()
-            if move_penalty == 0.0:
-                self.move_penalty=0.0
-            else:
-                self.move_penalty += move_penalty
-            #if self.move_penalty < -30.0:
-            if self.move_penalty < -20.0:
-                print(f"動かないので、お説教！ (点: {self.move_penalty:.3f})")
-                return True, self.move_penalty
+                return True,-20.0
+                #return True,-10.0
 
         return False,0.0
     

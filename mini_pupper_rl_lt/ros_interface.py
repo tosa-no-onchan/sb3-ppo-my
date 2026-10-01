@@ -453,13 +453,13 @@ class MiniPupperROSInterface(Node):
             #i = len(self.step_roll_vel_list)
             #i = 2 if i > 3 else 0
             # mean
-            #r_vel_raw = np.mean(self.step_roll_vel_list[i:])
-            #p_vel_raw = np.mean(self.step_pitch_vel_list[i:])
-            #y_vel_raw = np.mean(self.step_yaw_vel_list[i:])
+            r_vel_raw = np.mean(self.step_roll_vel_list)
+            p_vel_raw = np.mean(self.step_pitch_vel_list)
+            y_vel_raw = np.mean(self.step_yaw_vel_list)
             # one shot
-            r_vel_raw = self.step_roll_vel_list[-1]
-            p_vel_raw = self.step_pitch_vel_list[-1]
-            y_vel_raw = self.step_yaw_vel_list[-1]
+            #r_vel_raw = self.step_roll_vel_list[-1]
+            #p_vel_raw = self.step_pitch_vel_list[-1]
+            #y_vel_raw = self.step_yaw_vel_list[-1]
             self.imu_actual_vyaw = y_vel_raw
             
             # 平均化した角速度ベースで現在の運動エネルギーを再計算（ノイズレス！）
@@ -476,11 +476,17 @@ class MiniPupperROSInterface(Node):
             self.yaw_velocity_norm = np.clip(y_vel_raw * 0.15, -1.0, 1.0)
             #self.yaw_velocity_norm = np.clip(y_vel_raw * 0.3, -1.0, 1.0)
 
+            #i = len(self.step_linear_accel_x_list)
+            #i = 2 if i > 3 else 0
+            # mean
+            x_acc_raw = np.mean(self.step_linear_accel_x_list)
+            y_acc_raw = np.mean(self.step_linear_accel_y_list)
+            z_acc_raw = np.mean(self.step_linear_accel_z_list)
 
             # linear_accel x,y,z one shot
-            x_acc_raw = self.step_linear_accel_x_list[-1]
-            y_acc_raw = self.step_linear_accel_y_list[-1]
-            z_acc_raw = self.step_linear_accel_z_list[-1]
+            #x_acc_raw = self.step_linear_accel_x_list[-1]
+            #y_acc_raw = self.step_linear_accel_y_list[-1]
+            #z_acc_raw = self.step_linear_accel_z_list[-1]
 
             # model input 用にノーマライズする。
             self.linear_accel_x_norm = np.clip(x_acc_raw / MAX_ACCEL, -1.0, 1.0)
