@@ -24,7 +24,7 @@ PITCH_IDX = ROLL_IDX + 1            # 16
 
 # 例：基準姿勢（Nominal Pose）からの最大変化量を 0.5 rad（約28.6度）に制限する場合
 #MAX_ACTION_RAD = 0.5        # ここが、ベース。あくまで、 Gazebo 上の話!!
-MAX_ACTION_RAD = 0.8        # speed が付いていけないでの、こちらにする。 2026.9.30
+MAX_ACTION_RAD = 0.7        # speed が付いていけないでの、こちらにする。 2026.9.30
 #MAX_ACTION_RAD = 1.0        # 実機と同じ足の速度にするなら、こちら
 
 class MiniPupperEnv(gym.Env):
