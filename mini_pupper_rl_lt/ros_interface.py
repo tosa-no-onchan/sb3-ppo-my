@@ -202,10 +202,9 @@ class MiniPupperROSInterface(Node):
         self.latest_sim_time=0.0
         self.last_yaw= 0.0
 
-        self.calc_speed_x = 0.0
-        self.calc_speed_y = 0.0
-        self.calc_speed_z = 0.0
-
+        self.calc_speed_x = None
+        self.calc_speed_y = None
+        self.calc_speed_z = None
 
         # ⭕【追加】仮想オドメトリ変数の構築（初期値は原点）
         self.pupper_virt_odom = {
@@ -280,10 +279,23 @@ class MiniPupperROSInterface(Node):
         self.step_joint_vel_list.append(normalized_vel)
 
     def imu_callback(self,msg):
-        self.quat[0] = msg.orientation.x
-        self.quat[1] = msg.orientation.y
-        self.quat[2] = msg.orientation.z
-        self.quat[3] = msg.orientation.w
+        qx = msg.orientation.x
+        qy = msg.orientation.y
+        qz = msg.orientation.z
+        qw = msg.orientation.w
+
+        # クォータニオンが正規化されていない場合のセーフティ（念のため）
+        norm = np.sqrt(qx**2 + qy**2 + qz**2 + qw**2)
+        if norm > 0:
+            qx /= norm
+            qy /= norm
+            qz /= norm
+            qw /= norm
+
+        self.quat[0] = qx
+        self.quat[1] = qy
+        self.quat[2] = qz
+        self.quat[3] = qw
         self.roll, self.pitch, self.yaw = euler_from_quaternion_np(self.quat)
 
         cur_sim_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -313,14 +325,23 @@ class MiniPupperROSInterface(Node):
         self.step_yaw_vel_list.append(self.yaw_velocity)
 
         """IMUから線形加速度を取得する"""
+        # ② ロボット座標系における重力加速度（G=9.81）の分散成分を計算
+        # 世界座標の [0, 0, 9.81] (床からの抗力成分) をロボット座標に変換する式
+        g_local_x = 2.0 * (qx * qz - qw * qy) * 9.81
+        g_local_y = 2.0 * (qy * qz + qw * qx) * 9.81
+        g_local_z = (qw**2 - qx**2 - qy**2 + qz**2) * 9.81
+
         # 生 accel + ガウシアンノイズ
         # 注) 実機では、ガウシアンノイズは、外して
-        x_acc_raw = msg.linear_acceleration.x + np.random.normal(0.0, sigma_acc)
-        y_acc_raw = msg.linear_acceleration.y + np.random.normal(0.0, sigma_acc)
-        z_acc_raw = msg.linear_acceleration.z + np.random.normal(0.0, sigma_acc)
-        self.step_linear_accel_x_list.append(x_acc_raw)
-        self.step_linear_accel_y_list.append(y_acc_raw)
-        self.step_linear_accel_z_list.append(z_acc_raw)
+        # ③ IMUの生データから、計算した重力（抗力）成分を差し引く
+        # これにより、ロボットが傾いていても純粋な「動いた加速」だけが残る
+        x_acc_pure = msg.linear_acceleration.x - g_local_x + np.random.normal(0.0, sigma_acc)
+        y_acc_pure = msg.linear_acceleration.y - g_local_y + np.random.normal(0.0, sigma_acc)
+        z_acc_pure = msg.linear_acceleration.z - g_local_z + np.random.normal(0.0, sigma_acc)
+
+        self.step_linear_accel_x_list.append(x_acc_pure)
+        self.step_linear_accel_y_list.append(y_acc_pure)
+        self.step_linear_accel_z_list.append(z_acc_pure)
 
         # 簡易 speed 計算
         # imu rate average rate: 50.767 から 47.702  48[hz] -> 1/ 48.0 = 0.020833333333333332
@@ -328,13 +349,19 @@ class MiniPupperROSInterface(Node):
         if dt <= 0 or dt > 0.1:
             dt = 0.02  # 標準の20msで代替
 
-        # ② リーキー積分 (過去の速度を 5% ずつ減衰させてドリフトを防ぐ)
-        alpha = 0.95
-        
-        # 加速度から速度への変換 (簡易版)
-        self.calc_speed_x = alpha * self.calc_speed_x + (1 - alpha) * (x_acc_raw * dt)
-        self.calc_speed_y = alpha * self.calc_speed_y + (1 - alpha) * (y_acc_raw * dt)
-        self.calc_speed_z = alpha * self.calc_speed_z + (1 - alpha) * (z_acc_raw * dt)
+        # 💡 [ご提案の処理] 速度の初回初期化チェック
+        if self.calc_speed_x is None:
+            # 初回はフィルターを通さず、最初の純粋な速度をそのまま代入
+            self.calc_speed_x = x_acc_pure * dt
+            self.calc_speed_y = y_acc_pure * dt
+            self.calc_speed_z = z_acc_pure * dt
+        else:
+            # ② リーキー積分 (過去の速度を 5% ずつ減衰させてドリフトを防ぐ)
+            alpha = 0.95
+            # 加速度から速度への変換 (簡易版)
+            self.calc_speed_x = alpha * self.calc_speed_x + (1 - alpha) * (x_acc_pure * dt)
+            self.calc_speed_y = alpha * self.calc_speed_y + (1 - alpha) * (y_acc_pure * dt)
+            self.calc_speed_z = alpha * self.calc_speed_z + (1 - alpha) * (z_acc_pure * dt)
 
         if len(self.step_joint_vel_list) > 0:
             # axis=0 で縦方向に平均を取ることで、12次元配列が返ってきます
@@ -787,6 +814,6 @@ class MiniPupperROSInterface(Node):
 
         self.velocities=None
 
-        self.calc_speed_x = 0.0
-        self.calc_speed_y = 0.0
-        self.calc_speed_z = 0.0
+        self.calc_speed_x = None
+        self.calc_speed_y = None
+        self.calc_speed_z = None
