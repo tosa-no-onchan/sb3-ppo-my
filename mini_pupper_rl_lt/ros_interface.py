@@ -47,7 +47,8 @@ MAX_ACCEL = 20.0
 #SPEED_SCALE = 2.5 
 # 注) 今回は、 0.8 m/s を予定
 # 1.0 / 0.8 = 1.25
-SPEED_SCALE = 1.25 
+#SPEED_SCALE = 1.25
+SPEED_SCALE = 1.0
 
 # 1. 基準となるコントローラーの関節順を定義（クラスの初期化時などに配置）
 CONTROLLER_JOINT_ORDER = [
