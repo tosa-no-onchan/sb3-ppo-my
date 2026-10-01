@@ -293,10 +293,14 @@ class MiniPupperROSInterface(Node):
             dt=0.0
         self.latest_sim_time = cur_sim_time
 
-        # 生の角速度を取得
-        self.roll_velocity = msg.angular_velocity.x
-        self.pitch_velocity = msg.angular_velocity.y
-        self.yaw_velocity = msg.angular_velocity.z
+        sigma_gyro=0.05
+        sigma_acc=0.1
+
+        # 生の角速度を取得 + ガウシアンノイズ 
+        # 注) 実機では、ガウシアンノイズは、外して
+        self.roll_velocity = msg.angular_velocity.x + np.random.normal(0.0, sigma_gyro)
+        self.pitch_velocity = msg.angular_velocity.y + np.random.normal(0.0, sigma_gyro)
+        self.yaw_velocity = msg.angular_velocity.z + np.random.normal(0.0, sigma_gyro)
 
         # 正規化を施す
         #r_vel_norm = np.clip(self.roll_velocity * 0.15, -1.0, 1.0)
@@ -309,9 +313,11 @@ class MiniPupperROSInterface(Node):
         self.step_yaw_vel_list.append(self.yaw_velocity)
 
         """IMUから線形加速度を取得する"""
-        x_acc_raw = msg.linear_acceleration.x
-        y_acc_raw = msg.linear_acceleration.y
-        z_acc_raw = msg.linear_acceleration.z
+        # 生 accel + ガウシアンノイズ
+        # 注) 実機では、ガウシアンノイズは、外して
+        x_acc_raw = msg.linear_acceleration.x + np.random.normal(0.0, sigma_acc)
+        y_acc_raw = msg.linear_acceleration.y + np.random.normal(0.0, sigma_acc)
+        z_acc_raw = msg.linear_acceleration.z + np.random.normal(0.0, sigma_acc)
         self.step_linear_accel_x_list.append(x_acc_raw)
         self.step_linear_accel_y_list.append(y_acc_raw)
         self.step_linear_accel_z_list.append(z_acc_raw)
@@ -543,9 +549,6 @@ class MiniPupperROSInterface(Node):
             self.step_linear_accel_y_list.clear()
             self.step_linear_accel_z_list.clear()
 
-            self.calc_speed_x=0.0
-            self.calc_speed_y=0.0
-            self.calc_speed_z=0.0
         else:
             #print("step_roll_vel_list lng:0")
             rc=False
