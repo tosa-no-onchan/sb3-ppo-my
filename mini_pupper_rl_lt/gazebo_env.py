@@ -93,14 +93,8 @@ class MiniPupperEnv(gym.Env):
         self.episode_steps = 0
         self.test_id=0
 
-        self.move_penalty=0.0
-        self.move_penalty_cur=0.0
-
         self.reward_pos_av=0.0
         self.reward_yaw_av=0.0
-
-        # しきい値（この値まではペナルティゼロ、階段昇降を考慮して1.0〜1.2程度が安全）
-        self.pitch_vel_threshold = 1.5  # rad/s
 
         # stage=0 : 移動位置と角度の 2報酬形式
         # 3 : /cmd_vel 3速度の 3報酬形式
@@ -111,16 +105,9 @@ class MiniPupperEnv(gym.Env):
         self.use_2_reward=True
         self.use_rsl_rl_norm=True
 
-        self.min_height=0.12    # Pupper2 地上高
-        #self.min_height = 0.11   # 目標とする地上高 Pupper 高さ - 1[cm]
-        self.z_sigma = 0.04   # 許容するブレ幅の感度 low 側
-        self.z_sigma_high = 0.02 # 許容するブレ幅の感度 high 側
         #self.limit_low=0.05     # 最低地上高
-        self.limit_low=0.045     # 最低地上高
-
-        #self.max_height = 0.15  # 最高地上高 (0.15m)。これ以上はペナルティ最大
-        self.max_height = 0.145  # 最高地上高 (0.145m)。これ以上はペナルティ最大
-        #self.max_height = 0.14  # 最高地上高 (0.14m)。これ以上はペナルティ最大
+        #self.limit_low=0.045     # 最低地上高
+        self.limit_low=0.06     # 最低地上高
 
         # 300[steps] * 2.0 から 3.0[報酬]
         # 20[%](中:標準)
@@ -130,8 +117,6 @@ class MiniPupperEnv(gym.Env):
         self.fall_penalty = -120
 
         # train 初めは、優しい教育
-        #self.min_height=0.08
-        #self.z_sigma = 0.02   # 許容するブレ幅の感度
         # 位置追従オヤツ（ぴったり重なれば最大 1.0点、離れるほどゼロに近づく）
         self.reward_pos_c = -2.0
         # 向き追従オヤツ（理想の方向を向いていれば最大 1.0点）
@@ -142,9 +127,6 @@ class MiniPupperEnv(gym.Env):
             if self.use_rsl_rl_norm:
                 self.fall_penalty = -60 # 1.0 * 300 * 0.2 = 60
 
-        self.threshold_z_low = self.min_height - self.z_sigma   # 下側の境界線 (0.10m)
-        self.threshold_z_high = self.min_height + self.z_sigma_high  # 上側の境界線 (0.14m)
-
     def reset(self, seed=None, options=None):
         #print(F"MiniPupperEnv::reset() called!")
         self.episode +=1
@@ -153,9 +135,6 @@ class MiniPupperEnv(gym.Env):
         # リセット時にカウンターをゼロに戻す
         self.episode_steps = 0
         self.next_bounus_steps = self._max_episode_steps
-
-        self.move_penalty=0.0
-        self.move_penalty_cur=0.0
 
         self.reward_pos_av=0.0
         self.reward_yaw_av=0.0
@@ -463,7 +442,7 @@ class MiniPupperEnv(gym.Env):
         elif self.test_id==45:
             # 最小: -15 * 0.01 = -0.25
             # 最大:  15 * 0.01 = +0.5  (51は含まれないため最大50) (0.01刻み -> 75パターン)
-            vx = np.random.randint(-50, 81) * 0.01
+            vx = np.random.randint(-50, 51) * 0.01
         elif self.test_id==46:
             pass
         else:
@@ -478,7 +457,7 @@ class MiniPupperEnv(gym.Env):
                 rand_z = np.random.randint(-10, 10, size=5) / 10.0 # -1.0 から 1.0 の 0.1 単位の乱数の予定
 
             # x（前後）: -0.25 〜 0.5 (0.05刻み -> 16パターン)
-            cmd_x = np.random.randint(-5, 9) * 0.1
+            cmd_x = np.random.randint(-50, 51) * 0.01
             #cmd_x = np.random.randint(-50, 81) * 0.01
 
             # z（旋回 yaw角速度）: -1.0 〜 1.0 (0.1刻み -> 21パターン) 
@@ -1023,7 +1002,10 @@ class MiniPupperEnv(gym.Env):
         if True:
             if actual_z < self.limit_low: 
                 print(f"伏せしたので、お説教！ (高さ: {actual_z:.3f}M)")
-                return True,-20.0
+                return True,-60.0
+                #return True,-40.0
+                #return True,-30.0
+                #return True,-20.0
                 #return True,-10.0
 
         return False,0.0

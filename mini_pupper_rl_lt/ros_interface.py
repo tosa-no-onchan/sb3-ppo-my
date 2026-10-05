@@ -22,8 +22,8 @@ from collections import deque  # 1. ライブラリをインポート
 # 設計した最大値の定義
 #MAX_LIN_X = 0.8  # m/s
 #MAX_LIN_X = 0.26  # m/s
-#MAX_LIN_X = 0.5  # m/s  mini pupper2 推奨速度
-MAX_LIN_X = 0.8  # m/s  changed by nishi 2026.9.29
+MAX_LIN_X = 0.5  # m/s  mini pupper2 推奨速度
+#MAX_LIN_X = 0.8  # m/s  changed by nishi 2026.9.29
 MAX_LIN_X_BACK = 0.5  # m/s changed by nishi 2026.9.29
 #MAX_LIN_Y = 0.4  # m/s
 #MAX_LIN_Y = 0.13  # m/s
@@ -48,7 +48,7 @@ MAX_ACCEL = 20.0
 # 注) 今回は、 0.8 m/s を予定
 # 1.0 / 0.8 = 1.25
 #SPEED_SCALE = 1.25
-SPEED_SCALE = 1.0
+SPEED_SCALE = 2.0
 
 # 1. 基準となるコントローラーの関節順を定義（クラスの初期化時などに配置）
 CONTROLLER_JOINT_ORDER = [
